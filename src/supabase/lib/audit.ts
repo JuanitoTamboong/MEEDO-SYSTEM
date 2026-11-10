@@ -1,5 +1,5 @@
-// src/lib/audit.ts
-import { supabase } from './supabase';
+// src/supabase/lib/audit.ts
+import { supabase } from './supabase'; // CORRECT: Same folder
 
 /**
  * Records an action into the audit_logs table
@@ -10,31 +10,37 @@ export async function recordAuditLog(
   entityType: string | null = null, 
   entityId: number | null = null
 ) {
-  // 1. Get the current logged-in user from Supabase Auth
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    // 1. Get the current logged-in user from Supabase Auth
+    const { data: { user } } = await supabase.auth.getUser();
 
-  // 2. Get their role/username from user metadata (you set this up during Auth)
-  // If you don't have metadata, you might need to fetch from your 'login' table
-  const username = user?.email?.split('@')[0] || 'Unknown';
-  const role = user?.user_metadata?.role || 'Unknown';
-  const userId = user?.id || null;
+    // If no user is logged in, don't try to save a log
+    if (!user) return;
 
-  // 3. Insert the log
-  const { error } = await supabase.from('audit_logs').insert([
-    {
-      user_id: userId,
-      username: username,
-      role: role,
-      action: action,
-      description: description,
-      entity_type: entityType,
-      entity_id: entityId,
-      ip_address: null, // Browsers cannot easily get the user's IP address. Supabase Edge functions can, but for now we leave it null.
+    // 2. Get their role/username from user metadata
+    const username = user?.email?.split('@')[0] || 'Unknown';
+    const role = user?.user_metadata?.role || 'Unknown';
+    const userId = user?.id; // This is a UUID string
+
+    // 3. Insert the log
+    const { error } = await supabase.from('audit_logs').insert([
+      {
+        user_id: userId,
+        username: username,
+        role: role,
+        action: action,
+        description: description,
+        entity_type: entityType,
+        entity_id: entityId,
+        ip_address: null,
+      }
+    ]);
+
+    if (error) {
+      console.error("Failed to save audit log:", error.message);
     }
-  ]);
-
-  if (error) {
-    console.error("Failed to save audit log:", error.message);
+  } catch (err) {
+    console.error("Audit Log Error:", err);
   }
 }
 
@@ -47,7 +53,7 @@ export async function deleteAuditLog(logId: number) {
     .delete()
     .eq('id', logId);
 
-  return !error; // Returns true if successful, false if error
+  return !error;
 }
 
 /**
@@ -68,7 +74,6 @@ export async function deleteAuditLogsBulk(logIds: number[]) {
  * Clear ALL logs
  */
 export async function clearAuditLogs() {
-  // In Postgres, you can't just do DELETE without a filter unless you use .neq('id', 0)
   const { error, count } = await supabase
     .from('audit_logs')
     .delete()

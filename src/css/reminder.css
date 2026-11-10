@@ -1,0 +1,218 @@
+/* =========================================
+   REMINDER / NOTICE STYLES
+   ========================================= */
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.page-header h1 {
+    font-size: 24px;
+    color: #0f172a;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+}
+
+.page-header p {
+    color: #64748b;
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+.btn-secondary {
+    background: white;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #f1f5f9;
+}
+
+.form-container {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px -5px rgba(0,0,0,0.05);
+    overflow: hidden;
+    width: 100%;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+    padding: 24px 24px 0 24px;
+}
+
+.info-item {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 16px;
+}
+
+.info-item .label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+
+.info-item .value {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 15px;
+}
+
+.info-item .value.danger {
+    color: #dc2626;
+}
+
+.form-body {
+    padding: 24px;
+}
+
+/* Reminder Preview (WhatsApp style) */
+.message-preview-wrapper {
+    background: #e5ddd5;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    position: relative;
+}
+
+.message-preview {
+    background: #dcf8c6;
+    border-radius: 0 10px 10px 10px;
+    padding: 16px 18px;
+    white-space: pre-wrap;
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: #111b21;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    max-width: 90%;
+}
+
+/* Notice Preview (Formal style) */
+.notice-preview-wrapper {
+    background: #f8fafc;
+    padding: 24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    border: 1px dashed #cbd5e1;
+}
+
+.notice-preview {
+    white-space: pre-wrap;
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: #334155;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* Send Options */
+.send-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.send-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.btn-send {
+    flex: 1;
+    min-width: 180px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    color: #fff;
+    transition: all 0.2s ease;
+}
+
+.btn-send:hover {
+    transform: translateY(-2px);
+}
+
+.btn-whatsapp {
+    background: #20c997;
+    box-shadow: 0 4px 12px rgba(32, 201, 151, 0.2);
+}
+
+.btn-whatsapp:hover {
+    background: #1ab386;
+}
+
+.btn-messenger {
+    background: #0084ff;
+    box-shadow: 0 4px 12px rgba(0, 132, 255, 0.2);
+}
+
+.btn-messenger:hover {
+    background: #0073e6;
+}
+
+.btn-copy {
+    background: #334155;
+    width: 100%;
+    margin-top: 4px;
+}
+
+.btn-copy:hover {
+    background: #1e293b;
+}
+
+.copy-feedback {
+    margin-top: 14px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #16a34a;
+    text-align: center;
+    background: #dcfce7;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.no-contact {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}

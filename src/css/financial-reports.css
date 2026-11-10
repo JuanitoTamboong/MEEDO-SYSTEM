@@ -1,0 +1,296 @@
+/* =========================================
+   FINANCIAL REPORTS STYLES (Premium Enterprise)
+   ========================================= */
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.page-header h1 {
+    font-size: 24px;
+    color: #0f172a;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+}
+
+.page-header p {
+    color: #64748b;
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+/* --- Tabs --- */
+.report-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 1px;
+}
+
+.tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    margin-bottom: -1px;
+}
+
+.tab-btn:hover {
+    color: #0f172a;
+}
+
+.tab-btn.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    font-weight: 600;
+}
+
+.tab-btn i {
+    font-size: 14px;
+}
+
+/* --- Tab Content --- */
+.report-content {
+    display: none;
+}
+
+.report-content.active {
+    display: block;
+}
+
+/* --- Filter Bar --- */
+.filter-bar {
+    display: flex;
+    gap: 16px;
+    background: white;
+    padding: 16px 20px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 24px;
+}
+
+.filter-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter-item label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #475569;
+}
+
+.filter-item select {
+    padding: 6px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    color: #0f172a;
+}
+
+.filter-item select:focus {
+    border-color: #3b82f6;
+}
+
+/* --- Metric Row --- */
+.metric-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.metric-box {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.metric-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.metric-icon.blue { background: #eff6ff; color: #3b82f6; }
+.metric-icon.green { background: #ecfdf5; color: #10b981; }
+.metric-icon.orange { background: #fff7ed; color: #f97316; }
+.metric-icon.purple { background: #f5f3ff; color: #8b5cf6; }
+
+.metric-data {
+    flex: 1;
+}
+
+.metric-label {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.metric-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.1;
+    margin-bottom: 4px;
+}
+
+.metric-sub {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+/* --- Data Panel & Table --- */
+.data-panel {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 24px;
+}
+
+.data-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.data-header h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-secondary {
+    background: white;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #f1f5f9;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+th {
+    background: #ffffff;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 14px 24px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+td {
+    padding: 14px 24px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 14px;
+    color: #334155;
+}
+
+tr:hover td {
+    background: #f8fafc;
+}
+
+.text-center {
+    text-align: center;
+}
+
+/* --- Badges --- */
+.badge-ref {
+    display: inline-block;
+    padding: 4px 8px;
+    background: #f1f5f9;
+    color: #475569;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+    .report-tabs {
+        flex-direction: column;
+        border-bottom: none;
+    }
+    .tab-btn {
+        border-bottom: none;
+        border-left: 2px solid transparent;
+        justify-content: flex-start;
+        margin-bottom: 0;
+        border-radius: 6px;
+    }
+    .tab-btn.active {
+        background: #eff6ff;
+        border-left-color: #2563eb;
+        border-bottom-color: transparent;
+    }
+    .filter-bar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .filter-item {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .filter-item select {
+        flex: 1;
+    }
+}

@@ -6,7 +6,11 @@ import StallMonitoring from './pages/StallMonitoring';
 import ManageStalls from './pages/ManageStalls';
 import RegisterTenant from './pages/RegisterTenant';
 import StallDetails from './pages/StallDetails';
-import PayRent from './pages/PayRent'; // 1. Import the new page
+import PayRent from './pages/PayRent'; 
+import SendReminder from './pages/SendReminder';
+import SendNotice from './pages/SendNotice';
+import EditTenant from './pages/EditTenant';
+import FinancialReports from './pages/FinancialReports'; // 1. Import FinancialReports
 import Layout from './components/Layout';
 
 class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -47,8 +51,12 @@ function App() {
             <Route path="/manage-stalls" element={<ManageStalls />} /> 
             <Route path="/register-tenant" element={<RegisterTenant />} /> 
             <Route path="/stall-details" element={<StallDetails />} /> 
-            {/* 2. Add the new route here */}
             <Route path="/pay-rent" element={<PayRent />} /> 
+            <Route path="/send-reminder" element={<SendReminder />} /> 
+            <Route path="/send-notice" element={<SendNotice />} /> 
+            <Route path="/edit-tenant" element={<EditTenant />} /> 
+            {/* 2. Add the FinancialReports route here */}
+            <Route path="/financial-reports" element={<FinancialReports />} /> 
           </Route>
           
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

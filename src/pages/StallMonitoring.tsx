@@ -44,14 +44,8 @@ export default function StallMonitoring() {
   const [sectionFilter, setSectionFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Loading State (NEW)
+  // Loading State
   const [isLoading, setIsLoading] = useState(true);
-
-  // Modals
-  const [reminderModalOpen, setReminderModalOpen] = useState(false);
-  const [noticeModalOpen, setNoticeModalOpen] = useState(false);
-  const [selectedStall, setSelectedStall] = useState<{id: number, tenant: string, contact: string, stallNumber: string, amount: number} | null>(null);
-  const [selectedOverdue, setSelectedOverdue] = useState<{id: number, tenant: string, stallNumber: string} | null>(null);
 
   const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
 
@@ -60,7 +54,7 @@ export default function StallMonitoring() {
   }, []);
 
   async function fetchData() {
-    setIsLoading(true); // Start loading
+    setIsLoading(true);
     try {
       // 1. Fetch raw data
       const { data: stallsData } = await supabase.from('stalls').select('*');
@@ -135,7 +129,7 @@ export default function StallMonitoring() {
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
-      setIsLoading(false); // Stop loading regardless of success/fail
+      setIsLoading(false);
     }
   }
 
@@ -168,38 +162,6 @@ export default function StallMonitoring() {
     a.href = url;
     a.download = `stall-monitoring-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
-  };
-
-  // Modal Handlers
-  const handleOpenReminder = (stall: Stall) => {
-    setSelectedStall({
-      id: stall.id,
-      tenant: stall.tenant_name || '',
-      contact: stall.contact_number || '',
-      stallNumber: stall.stall_number,
-      amount: stall.monthly_rent
-    });
-    setReminderModalOpen(true);
-  };
-
-  const handleOpenNotice = (overdue: OverduePayment) => {
-    setSelectedOverdue({
-      id: overdue.id,
-      tenant: overdue.tenant_name || '',
-      stallNumber: overdue.stall_number
-    });
-    setNoticeModalOpen(true);
-  };
-
-  // WhatsApp Link Generator
-  const getWhatsAppLink = () => {
-    if (!selectedStall) return '#';
-    let cleanPhone = selectedStall.contact.replace(/\D/g, '');
-    if (cleanPhone.length === 10 && cleanPhone.startsWith('9')) cleanPhone = '63' + cleanPhone;
-    if (cleanPhone.length === 11 && cleanPhone.startsWith('0')) cleanPhone = '63' + cleanPhone.substring(1);
-
-    const text = `Dear ${selectedStall.tenant},\n\nThis is a friendly reminder from MEEDO - Odiongan Public Market that your monthly stall rental for Stall ${selectedStall.stallNumber} is due.\n\nAmount Due: PHP ${selectedStall.amount}\n\nPlease settle your payment at the market office before the due date to avoid penalties.\n\nThank you!`;
-    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   };
 
   return (
@@ -277,7 +239,6 @@ export default function StallMonitoring() {
         </div>
 
         <div className="table-responsive">
-          {/* LOADING STATE INJECTED HERE */}
           {isLoading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
               <div style={{ 
@@ -336,7 +297,11 @@ export default function StallMonitoring() {
                             <i className="fa-solid fa-eye"></i>
                           </button>
                           {stall.tenant_name && stall.payment_status !== 'Paid' && (
-                            <button className="btn-action reminder" title="Send Reminder" onClick={() => handleOpenReminder(stall)}>
+                            <button 
+                              className="btn-action reminder" 
+                              title="Send Reminder" 
+                              onClick={() => navigate(`/send-reminder?stall=${stall.id}`)}
+                            >
                               <i className="fa-solid fa-bell"></i>
                             </button>
                           )}
@@ -396,7 +361,11 @@ export default function StallMonitoring() {
                         >
                           <i className="fa-solid fa-eye"></i>
                         </button>
-                        <button className="btn-action reminder" title="Send Notice" onClick={() => handleOpenNotice(overdue)}>
+                        <button 
+                          className="btn-action reminder" 
+                          title="Send Notice" 
+                          onClick={() => navigate(`/send-notice?payment=${overdue.id}`)}
+                        >
                           <i className="fa-solid fa-envelope"></i>
                         </button>
                       </td>
@@ -405,50 +374,6 @@ export default function StallMonitoring() {
                 })}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* Reminder Modal */}
-      {reminderModalOpen && selectedStall && (
-        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setReminderModalOpen(false) }}>
-          <div className="modal-box">
-            <div className="modal-icon info-icon"><i className="fa-solid fa-paper-plane"></i></div>
-            <h3>Send Payment Reminder</h3>
-            <p>Choose how you want to send this reminder to the tenant.</p>
-            
-            <div className="modal-details">
-              <div><span>Tenant</span> <strong>{selectedStall.tenant}</strong></div>
-              <div><span>Stall</span> <strong>{selectedStall.stallNumber}</strong></div>
-              <div><span>Rent Due</span> <strong>₱{selectedStall.amount.toLocaleString()}</strong></div>
-            </div>
-
-            <div className="modal-actions">
-              <a href={getWhatsAppLink()} target="_blank" rel="noreferrer" className="btn-primary" style={{ background: '#20c997', color: 'white' }}>
-                <i className="fa-brands fa-whatsapp"></i> Send via WhatsApp
-              </a>
-              <button className="btn-cancel" onClick={() => setReminderModalOpen(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Notice Modal */}
-      {noticeModalOpen && selectedOverdue && (
-        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setNoticeModalOpen(false) }}>
-          <div className="modal-box">
-            <div className="modal-icon danger-icon"><i className="fa-solid fa-envelope-open-text"></i></div>
-            <h3>Send Overdue Notice</h3>
-            <p>This account has an unpaid balance with a 25% penalty applied.</p>
-            
-            <div className="modal-details">
-              <div><span>Tenant</span> <strong>{selectedOverdue.tenant}</strong></div>
-              <div><span>Stall</span> <strong>{selectedOverdue.stallNumber}</strong></div>
-            </div>
-
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setNoticeModalOpen(false)}>Cancel</button>
-            </div>
           </div>
         </div>
       )}
