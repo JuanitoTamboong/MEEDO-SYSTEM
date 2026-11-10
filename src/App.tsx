@@ -10,7 +10,9 @@ import PayRent from './pages/PayRent';
 import SendReminder from './pages/SendReminder';
 import SendNotice from './pages/SendNotice';
 import EditTenant from './pages/EditTenant';
-import FinancialReports from './pages/FinancialReports'; // 1. Import FinancialReports
+import FinancialReports from './pages/FinancialReports';
+import Contracts from './pages/Contracts';
+import ActivityLogs from './pages/ActivityLogs'; // 1. Import ActivityLogs
 import Layout from './components/Layout';
 
 class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -55,8 +57,10 @@ function App() {
             <Route path="/send-reminder" element={<SendReminder />} /> 
             <Route path="/send-notice" element={<SendNotice />} /> 
             <Route path="/edit-tenant" element={<EditTenant />} /> 
-            {/* 2. Add the FinancialReports route here */}
             <Route path="/financial-reports" element={<FinancialReports />} /> 
+            <Route path="/contracts" element={<Contracts />} /> 
+            {/* 2. Add the ActivityLogs route here */}
+            <Route path="/logs" element={<ActivityLogs />} /> 
           </Route>
           
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

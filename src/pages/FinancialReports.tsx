@@ -140,7 +140,6 @@ export default function FinancialReports() {
     if (!table) return;
 
     const rows = table.querySelectorAll('tr');
-    // FIXED: Explicitly typed as string[]
     const csv: string[] = []; 
     
     rows.forEach(row => {
@@ -161,6 +160,41 @@ export default function FinancialReports() {
     a.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
   };
+
+  // ==========================================
+  // BEAUTIFUL CENTERED LOADING SCREEN
+  // ==========================================
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        minHeight: '100vh', 
+        width: '100%',
+        background: '#f8fafc' 
+      }}>
+        <div style={{ 
+          width: '48px', 
+          height: '48px', 
+          border: '4px solid #e2e8f0', 
+          borderTop: '4px solid #3b82f6', 
+          borderRadius: '50%', 
+          animation: 'spin 1s linear infinite' 
+        }}></div>
+        <p style={{ marginTop: '20px', color: '#64748b', fontSize: '15px', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
+          Loading report data...
+        </p>
+        <style>{`
+          @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="content-wrapper">
@@ -184,221 +218,211 @@ export default function FinancialReports() {
         </button>
       </div>
 
-      {isLoading ? (
-        <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-          <div style={{ width: '40px', height: '40px', border: '4px solid #e2e8f0', borderTop: '4px solid #3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }}></div>
-          Loading report data...
-          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      {/* MONTHLY TAB */}
+      {activeTab === 'monthly' && (
+        <div className="report-content active">
+          <div className="filter-bar">
+            <div className="filter-item">
+              <label>Month</label>
+              <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>
+                {monthsList.map(m => <option key={m.num} value={m.num}>{m.name}</option>)}
+              </select>
+            </div>
+            <div className="filter-item">
+              <label>Year</label>
+              <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
+                {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="metric-row">
+            <div className="metric-box">
+              <div className="metric-icon blue"><i className="fa-solid fa-coins"></i></div>
+              <div className="metric-data">
+                <div className="metric-label">Total Collections</div>
+                <div className="metric-value">₱{totalCollections.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div className="metric-sub">{monthsList[selectedMonth - 1].name} {selectedYear}</div>
+              </div>
+            </div>
+            <div className="metric-box">
+              <div className="metric-icon purple"><i className="fa-solid fa-receipt"></i></div>
+              <div className="metric-data">
+                <div className="metric-label">Payments Processed</div>
+                <div className="metric-value">{paymentCount}</div>
+                <div className="metric-sub">Transactions this month</div>
+              </div>
+            </div>
+            <div className="metric-box">
+              <div className="metric-icon green"><i className="fa-solid fa-calculator"></i></div>
+              <div className="metric-data">
+                <div className="metric-label">Average Payment</div>
+                <div className="metric-value">₱{avgPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div className="metric-sub">Per transaction</div>
+              </div>
+            </div>
+            <div className="metric-box">
+              <div className="metric-icon orange"><i className="fa-solid fa-percent"></i></div>
+              <div className="metric-data">
+                <div className="metric-label">Collection Rate</div>
+                <div className="metric-value">{collectionRate}%</div>
+                <div className="metric-sub">Of total tenants</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="data-panel">
+            <div className="data-header">
+              <h2>Collection Details</h2>
+              <button className="btn-secondary" onClick={() => exportTable('monthlyTable', 'monthly-report')}>
+                <i className="fa-solid fa-download"></i> Export
+              </button>
+            </div>
+            <div className="table-responsive">
+              <table id="monthlyTable">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Stall #</th>
+                    <th>Tenant</th>
+                    <th>Section</th>
+                    <th>Amount</th>
+                    <th>Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyPayments.length === 0 ? (
+                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No payments found for this period.</td></tr>
+                  ) : (
+                    monthlyPayments.map(p => (
+                      <tr key={p.id}>
+                        <td>{new Date(p.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                        <td><strong>{p.stall_number || '—'}</strong></td>
+                        <td>{p.tenant_name || '—'}</td>
+                        <td>{p.section_name || '—'}</td>
+                        <td style={{ fontWeight: 600, color: '#0f172a' }}>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td><span className="badge-ref">{p.receipt_number || `PAY-${p.id}`}</span></td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      ) : (
-        <>
-          {/* MONTHLY TAB */}
-          {activeTab === 'monthly' && (
-            <div className="report-content active">
-              <div className="filter-bar">
-                <div className="filter-item">
-                  <label>Month</label>
-                  <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>
-                    {monthsList.map(m => <option key={m.num} value={m.num}>{m.name}</option>)}
-                  </select>
-                </div>
-                <div className="filter-item">
-                  <label>Year</label>
-                  <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
-                    {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                </div>
-              </div>
+      )}
 
-              <div className="metric-row">
-                <div className="metric-box">
-                  <div className="metric-icon blue"><i className="fa-solid fa-coins"></i></div>
-                  <div className="metric-data">
-                    <div className="metric-label">Total Collections</div>
-                    <div className="metric-value">₱{totalCollections.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                    <div className="metric-sub">{monthsList[selectedMonth - 1].name} {selectedYear}</div>
-                  </div>
-                </div>
-                <div className="metric-box">
-                  <div className="metric-icon purple"><i className="fa-solid fa-receipt"></i></div>
-                  <div className="metric-data">
-                    <div className="metric-label">Payments Processed</div>
-                    <div className="metric-value">{paymentCount}</div>
-                    <div className="metric-sub">Transactions this month</div>
-                  </div>
-                </div>
-                <div className="metric-box">
-                  <div className="metric-icon green"><i className="fa-solid fa-calculator"></i></div>
-                  <div className="metric-data">
-                    <div className="metric-label">Average Payment</div>
-                    <div className="metric-value">₱{avgPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                    <div className="metric-sub">Per transaction</div>
-                  </div>
-                </div>
-                <div className="metric-box">
-                  <div className="metric-icon orange"><i className="fa-solid fa-percent"></i></div>
-                  <div className="metric-data">
-                    <div className="metric-label">Collection Rate</div>
-                    <div className="metric-value">{collectionRate}%</div>
-                    <div className="metric-sub">Of total tenants</div>
-                  </div>
-                </div>
-              </div>
+      {/* ANNUAL TAB */}
+      {activeTab === 'annual' && (
+        <div className="report-content active">
+          <div className="filter-bar">
+            <div className="filter-item">
+              <label>Year</label>
+              <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
+                {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
 
-              <div className="data-panel">
-                <div className="data-header">
-                  <h2>Collection Details</h2>
-                  <button className="btn-secondary" onClick={() => exportTable('monthlyTable', 'monthly-report')}>
-                    <i className="fa-solid fa-download"></i> Export
-                  </button>
-                </div>
-                <div className="table-responsive">
-                  <table id="monthlyTable">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Stall #</th>
-                        <th>Tenant</th>
-                        <th>Section</th>
-                        <th>Amount</th>
-                        <th>Reference</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {monthlyPayments.length === 0 ? (
-                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No payments found for this period.</td></tr>
-                      ) : (
-                        monthlyPayments.map(p => (
-                          <tr key={p.id}>
-                            <td>{new Date(p.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                            <td><strong>{p.stall_number || '—'}</strong></td>
-                            <td>{p.tenant_name || '—'}</td>
-                            <td>{p.section_name || '—'}</td>
-                            <td style={{ fontWeight: 600, color: '#0f172a' }}>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td><span className="badge-ref">{p.receipt_number || `PAY-${p.id}`}</span></td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+          <div className="metric-row">
+            <div className="metric-box" style={{ gridColumn: 'span 2' }}>
+              <div className="metric-icon blue"><i className="fa-solid fa-chart-line"></i></div>
+              <div className="metric-data">
+                <div className="metric-label">Annual Total Collections</div>
+                <div className="metric-value">₱{annualTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div className="metric-sub">For the year {selectedYear}</div>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* ANNUAL TAB */}
-          {activeTab === 'annual' && (
-            <div className="report-content active">
-              <div className="filter-bar">
-                <div className="filter-item">
-                  <label>Year</label>
-                  <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
-                    {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="metric-row">
-                <div className="metric-box" style={{ gridColumn: 'span 2' }}>
-                  <div className="metric-icon blue"><i className="fa-solid fa-chart-line"></i></div>
-                  <div className="metric-data">
-                    <div className="metric-label">Annual Total Collections</div>
-                    <div className="metric-value">₱{annualTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                    <div className="metric-sub">For the year {selectedYear}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="data-panel">
-                <div className="data-header">
-                  <h2>Monthly Breakdown</h2>
-                  <button className="btn-secondary" onClick={() => exportTable('annualTable', 'annual-report')}>
-                    <i className="fa-solid fa-download"></i> Export
-                  </button>
-                </div>
-                <div className="table-responsive">
-                  <table id="annualTable">
-                    <thead>
-                      <tr>
-                        <th>Month</th>
-                        <th>Payments</th>
-                        <th>Total Amount</th>
-                        <th>Average per Payment</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {monthsList.map(m => {
-                        const data = annualData[m.num];
-                        return (
-                          <tr key={m.num}>
-                            <td><strong>{m.name}</strong></td>
-                            <td>{data?.count || 0}</td>
-                            <td>₱{(data?.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td>₱{(data ? (data.total / data.count) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+          <div className="data-panel">
+            <div className="data-header">
+              <h2>Monthly Breakdown</h2>
+              <button className="btn-secondary" onClick={() => exportTable('annualTable', 'annual-report')}>
+                <i className="fa-solid fa-download"></i> Export
+              </button>
             </div>
-          )}
-
-          {/* OVERDUE TAB */}
-          {activeTab === 'overdue' && (
-            <div className="report-content active">
-              <div className="data-panel">
-                <div className="data-header">
-                  <h2 style={{ color: '#dc2626' }}><i className="fa-solid fa-exclamation-triangle"></i> Overdue Accounts (25% Penalty)</h2>
-                  <button className="btn-secondary" onClick={() => exportTable('overdueTable', 'overdue-report')}>
-                    <i className="fa-solid fa-download"></i> Export
-                  </button>
-                </div>
-                <div className="table-responsive">
-                  <table id="overdueTable">
-                    <thead>
-                      <tr>
-                        <th>Stall #</th>
-                        <th>Tenant</th>
-                        <th>Section</th>
-                        <th>Amount Due</th>
-                        <th>Due Date</th>
-                        <th>Days Overdue</th>
-                        <th>Penalty</th>
-                        <th>Total Due</th>
+            <div className="table-responsive">
+              <table id="annualTable">
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    <th>Payments</th>
+                    <th>Total Amount</th>
+                    <th>Average per Payment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthsList.map(m => {
+                    const data = annualData[m.num];
+                    return (
+                      <tr key={m.num}>
+                        <td><strong>{m.name}</strong></td>
+                        <td>{data?.count || 0}</td>
+                        <td>₱{(data?.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td>₱{(data ? (data.total / data.count) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {overduePayments.length === 0 ? (
-                        <tr><td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No overdue accounts found.</td></tr>
-                      ) : (
-                        overduePayments.map(o => {
-                          const daysOverdue = Math.ceil((new Date().getTime() - new Date(o.due_date).getTime()) / (1000 * 3600 * 24));
-                          const penalty = Number(o.amount) * 0.25;
-                          const totalDue = Number(o.amount) + penalty;
-
-                          return (
-                            <tr key={o.id}>
-                              <td><strong style={{ color: '#dc2626' }}>{o.stall_number || '—'}</strong></td>
-                              <td>{o.tenant_name || '—'}</td>
-                              <td>{o.section_name || '—'}</td>
-                              <td>₱{Number(o.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                              <td>{new Date(o.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                              <td>{daysOverdue} days</td>
-                              <td style={{ color: '#dc2626' }}>+ ₱{penalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                              <td><strong style={{ color: '#dc2626' }}>₱{totalDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
-        </>
+          </div>
+        </div>
+      )}
+
+      {/* OVERDUE TAB */}
+      {activeTab === 'overdue' && (
+        <div className="report-content active">
+          <div className="data-panel">
+            <div className="data-header">
+              <h2 style={{ color: '#dc2626' }}><i className="fa-solid fa-exclamation-triangle"></i> Overdue Accounts (25% Penalty)</h2>
+              <button className="btn-secondary" onClick={() => exportTable('overdueTable', 'overdue-report')}>
+                <i className="fa-solid fa-download"></i> Export
+              </button>
+            </div>
+            <div className="table-responsive">
+              <table id="overdueTable">
+                <thead>
+                  <tr>
+                    <th>Stall #</th>
+                    <th>Tenant</th>
+                    <th>Section</th>
+                    <th>Amount Due</th>
+                    <th>Due Date</th>
+                    <th>Days Overdue</th>
+                    <th>Penalty</th>
+                    <th>Total Due</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overduePayments.length === 0 ? (
+                    <tr><td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No overdue accounts found.</td></tr>
+                  ) : (
+                    overduePayments.map(o => {
+                      const daysOverdue = Math.ceil((new Date().getTime() - new Date(o.due_date).getTime()) / (1000 * 3600 * 24));
+                      const penalty = Number(o.amount) * 0.25;
+                      const totalDue = Number(o.amount) + penalty;
+
+                      return (
+                        <tr key={o.id}>
+                          <td><strong style={{ color: '#dc2626' }}>{o.stall_number || '—'}</strong></td>
+                          <td>{o.tenant_name || '—'}</td>
+                          <td>{o.section_name || '—'}</td>
+                          <td>₱{Number(o.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td>{new Date(o.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                          <td>{daysOverdue} days</td>
+                          <td style={{ color: '#dc2626' }}>+ ₱{penalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td><strong style={{ color: '#dc2626' }}>₱{totalDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
