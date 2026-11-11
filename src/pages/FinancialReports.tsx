@@ -54,12 +54,14 @@ export default function FinancialReports() {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
 
-      // 1. Fetch Stalls (for lookup maps)
+      // 1. Fetch Stalls, Sections, and TENANTS (Real Data)
       const { data: stallsData } = await supabase.from('stalls').select('id, stall_number, section_id');
       const { data: sectionsData } = await supabase.from('sections').select('id, section_name');
+      const { data: tenantsData } = await supabase.from('tenants').select('stall_id, full_name').eq('status', 'active');
       
       const stallMap = new Map(stallsData?.map(s => [s.id, s]) || []);
       const sectionMap = new Map(sectionsData?.map(s => [s.id, s]) || []);
+      const tenantMap = new Map(tenantsData?.map(t => [t.stall_id, t.full_name]) || []);
 
       // 2. Fetch Monthly Paid Payments
       const { data: paidData } = await supabase
@@ -74,8 +76,17 @@ export default function FinancialReports() {
         const enriched = paidData.map(p => {
           const stall = stallMap.get(p.stall_id);
           const section = stall ? sectionMap.get(stall.section_id) : null;
-          return { ...p, stall_number: stall?.stall_number, section_name: section?.section_name };
+          // Pull the real tenant name from the Tenants table, fallback to payments table
+          const realTenantName = tenantMap.get(p.stall_id) || p.tenant_name;
+          
+          return { 
+            ...p, 
+            stall_number: stall?.stall_number, 
+            section_name: section?.section_name,
+            display_tenant_name: realTenantName 
+          };
         });
+        
         setMonthlyPayments(enriched);
         setPaymentCount(enriched.length);
         const total = enriched.reduce((sum, p) => sum + Number(p.amount), 0);
@@ -99,7 +110,14 @@ export default function FinancialReports() {
         const enrichedOverdue = overdueData.map(o => {
           const stall = stallMap.get(o.stall_id);
           const section = stall ? sectionMap.get(stall.section_id) : null;
-          return { ...o, stall_number: stall?.stall_number, section_name: section?.section_name };
+          const realTenantName = tenantMap.get(o.stall_id) || o.tenant_name;
+          
+          return { 
+            ...o, 
+            stall_number: stall?.stall_number, 
+            section_name: section?.section_name,
+            display_tenant_name: realTenantName 
+          };
         });
         setOverduePayments(enrichedOverdue);
       }
@@ -161,37 +179,12 @@ export default function FinancialReports() {
     a.click();
   };
 
-  // ==========================================
-  // BEAUTIFUL CENTERED LOADING SCREEN
-  // ==========================================
   if (isLoading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        minHeight: '100vh', 
-        width: '100%',
-        background: '#f8fafc' 
-      }}>
-        <div style={{ 
-          width: '48px', 
-          height: '48px', 
-          border: '4px solid #e2e8f0', 
-          borderTop: '4px solid #3b82f6', 
-          borderRadius: '50%', 
-          animation: 'spin 1s linear infinite' 
-        }}></div>
-        <p style={{ marginTop: '20px', color: '#64748b', fontSize: '15px', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
-          Loading report data...
-        </p>
-        <style>{`
-          @keyframes spin { 
-            0% { transform: rotate(0deg); } 
-            100% { transform: rotate(360deg); } 
-          }
-        `}</style>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%', background: '#f8fafc' }}>
+        <div style={{ width: '48px', height: '48px', border: '4px solid #e2e8f0', borderTop: '4px solid #3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <p style={{ marginTop: '20px', color: '#64748b', fontSize: '15px', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>Loading report data...</p>
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -298,7 +291,8 @@ export default function FinancialReports() {
                       <tr key={p.id}>
                         <td>{new Date(p.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                         <td><strong>{p.stall_number || '—'}</strong></td>
-                        <td>{p.tenant_name || '—'}</td>
+                        {/* NOW USING REAL DATA */}
+                        <td>{p.display_tenant_name || '—'}</td>
                         <td>{p.section_name || '—'}</td>
                         <td style={{ fontWeight: 600, color: '#0f172a' }}>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         <td><span className="badge-ref">{p.receipt_number || `PAY-${p.id}`}</span></td>
@@ -407,7 +401,8 @@ export default function FinancialReports() {
                       return (
                         <tr key={o.id}>
                           <td><strong style={{ color: '#dc2626' }}>{o.stall_number || '—'}</strong></td>
-                          <td>{o.tenant_name || '—'}</td>
+                          {/* NOW USING REAL DATA */}
+                          <td>{o.display_tenant_name || '—'}</td>
                           <td>{o.section_name || '—'}</td>
                           <td>₱{Number(o.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td>{new Date(o.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
