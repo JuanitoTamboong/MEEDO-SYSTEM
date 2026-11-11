@@ -47,8 +47,6 @@ export default function StallMonitoring() {
   // Loading State
   const [isLoading, setIsLoading] = useState(true);
 
-  const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
-
   useEffect(() => {
     fetchData();
   }, []);
@@ -61,11 +59,11 @@ export default function StallMonitoring() {
       const { data: tenantsData } = await supabase.from('tenants').select('*').eq('status', 'active');
       const { data: sectionsData } = await supabase.from('sections').select('*');
       
+      // FETCH ALL PAYMENTS (Removed the hardcoded 1st-of-the-month filter)
       const { data: paymentsData } = await supabase
         .from('payments')
         .select('*')
-        .gte('month_covered', currentMonth)
-        .lte('month_covered', currentMonth);
+        .order('due_date', { ascending: false }); // Get newest first
 
       const { data: overdueData } = await supabase
         .from('payments')
@@ -77,12 +75,16 @@ export default function StallMonitoring() {
       if (stallsData) {
         const mappedStalls: Stall[] = stallsData.map((s) => {
           const activeTenant = tenantsData?.find((t) => t.stall_id === s.id);
-          const payment = paymentsData?.find((p) => p.stall_id === s.id);
+          
+          // FIND LATEST PAYMENT FOR THIS STALL
+          const stallPayments = paymentsData?.filter((p) => p.stall_id === s.id) || [];
+          const latestPayment = stallPayments.length > 0 ? stallPayments[0] : null;
+
           const section = sectionsData?.find((sec) => sec.id === s.section_id);
           
           let pStatus = 'Available';
           if (s.status === 'Occupied' && activeTenant) {
-            pStatus = payment ? payment.status : 'Pending';
+            pStatus = latestPayment ? latestPayment.status : 'Pending';
           }
 
           return {
@@ -94,7 +96,7 @@ export default function StallMonitoring() {
             contact_number: activeTenant?.contact_number || null,
             section_name: section?.section_name || null,
             payment_status: pStatus,
-            due_date: payment?.due_date || null
+            due_date: latestPayment?.due_date || null
           };
         });
 
@@ -289,7 +291,6 @@ export default function StallMonitoring() {
                           )}
                         </td>
                         <td>
-                          {/* FIXED: Wrapped buttons in action-buttons div */}
                           <div className="action-buttons">
                             <button 
                               className="btn-action" 
@@ -357,7 +358,6 @@ export default function StallMonitoring() {
                       <td style={{ color: '#dc2626' }}>+ ₱{penalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       <td><strong style={{ color: '#dc2626' }}>₱{totalDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
                       <td>
-                        {/* FIXED: Wrapped buttons in action-buttons div */}
                         <div className="action-buttons">
                           <button 
                             className="btn-action" 

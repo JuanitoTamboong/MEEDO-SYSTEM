@@ -30,7 +30,7 @@ export default function RegisterTenant() {
   });
 
   // Status State
-  const [isLoading, setIsLoading] = useState(true); // ADDED LOADING STATE
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -40,7 +40,7 @@ export default function RegisterTenant() {
   }, []);
 
   async function fetchData() {
-    setIsLoading(true); // Start loading
+    setIsLoading(true);
     try {
       // 1. Fetch Metrics
       const { count: tenantsCount } = await supabase
@@ -71,7 +71,7 @@ export default function RegisterTenant() {
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
-      setIsLoading(false); // Stop loading
+      setIsLoading(false);
     }
   }
 
@@ -134,18 +134,24 @@ export default function RegisterTenant() {
         .update({ status: 'Occupied', tenant_name: formData.full_name.trim() })
         .eq('id', selectedStall.id);
 
-      // 5. Create Initial Payment Record (Paid for current month)
-      const today = new Date().toISOString().split('T')[0];
-      const currentMonth = today.slice(0, 7) + '-01'; 
-      const receiptNumber = `REG-${today.replace(/-/g, '')}-${tenantData.id}`;
+      // 5. Create Initial Payment Record (FIXED TO 1 MONTH EXACT)
+      const today = new Date(); 
+      const todayString = today.toISOString().split('T')[0]; // e.g., "2026-11-11"
+      
+      // Calculate exactly one month later for the due date
+      const nextMonth = new Date(today);
+      nextMonth.setMonth(nextMonth.getMonth() + 1); 
+      const nextMonthString = nextMonth.toISOString().split('T')[0]; // e.g., "2026-12-11"
+
+      const receiptNumber = `REG-${todayString.replace(/-/g, '')}-${tenantData.id}`;
 
       await supabase.from('payments').insert([{
         stall_id: selectedStall.id,
         tenant_name: formData.full_name.trim(),
         amount: selectedStall.monthly_rent,
-        payment_date: today,
-        due_date: currentMonth,
-        month_covered: currentMonth,
+        payment_date: todayString,      // Date paid
+        due_date: nextMonthString,      // Due exactly 1 month later
+        month_covered: todayString,     // Covers the current registration month
         status: 'Paid',
         receipt_number: receiptNumber
       }]);
@@ -164,7 +170,7 @@ export default function RegisterTenant() {
       // Clear the form
       setFormData({ full_name: '', date_of_birth: '', contact_number: '', street: '', barangay: '', city: '', stall_id: '', business_name: '' });
       
-      // Refresh the available stalls dropdown so the used stall disappears
+      // Refresh the available stalls dropdown
       fetchData(); 
 
     } catch (error: any) {
@@ -174,7 +180,6 @@ export default function RegisterTenant() {
     }
   };
 
-  // --- ADDED LOADING SCREEN ---
   if (isLoading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', width: '100%' }}>

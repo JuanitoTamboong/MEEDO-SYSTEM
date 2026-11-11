@@ -28,7 +28,6 @@ export default function StallDetails() {
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  // NEW: State for Permission Popup
   const [showPermissionPopup, setShowPermissionPopup] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState('');
 
@@ -70,12 +69,16 @@ export default function StallDetails() {
         if (tenantData) setTenant(tenantData);
       }
 
-      const { data: historyData } = await supabase.from('payments').select('*').eq('stall_id', stallData.id).order('month_covered', { ascending: false }).limit(10);
-      if (historyData) setPaymentHistory(historyData);
-
-      const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
-      const { data: currentPayData } = await supabase.from('payments').select('*').eq('stall_id', stallData.id).gte('month_covered', currentMonth).lte('month_covered', currentMonth).maybeSingle();
-      if (currentPayData) setCurrentPayment(currentPayData);
+      // Fetch Payment History (sorted by due_date descending)
+      const { data: historyData } = await supabase.from('payments').select('*').eq('stall_id', stallData.id).order('due_date', { ascending: false }).limit(10);
+      
+      if (historyData) {
+        setPaymentHistory(historyData);
+        // The most recent payment is the first one in the descending list
+        if (historyData.length > 0) {
+          setCurrentPayment(historyData[0]);
+        }
+      }
 
     } catch (error: any) {
       setErrorMsg(error.message || "Failed to load stall details.");
@@ -87,7 +90,6 @@ export default function StallDetails() {
   const handleVacate = async () => {
     if (!stall || !tenant) return;
     
-    // Only Admin can actually vacate
     if (userRole !== 'Administrator' && userRole !== 'Meedo Personnel') {
       setVacateModalOpen(false);
       setPermissionMessage("Only Administrators and Meedo Personnel can vacate a stall.");
@@ -138,7 +140,6 @@ export default function StallDetails() {
     }
   };
 
-  // HANDLERS for Permissions
   const handleEditTenantClick = () => {
     if (userRole === 'Administrator' || userRole === 'Meedo Personnel') {
       navigate(`/edit-tenant?id=${tenant?.id}`);
@@ -187,6 +188,14 @@ export default function StallDetails() {
 
   const paymentStatus = currentPayment?.status || 'Unpaid';
   const statusClass = paymentStatus.toLowerCase() === 'overdue' ? 'overdue' : (paymentStatus.toLowerCase() === 'paid' ? 'paid' : 'unpaid');
+  
+  // --- DYNAMIC BILLING CYCLE INDICATOR ---
+  let billingCycleText = '1st of the month';
+  if (currentPayment?.due_date) {
+    const day = new Date(currentPayment.due_date).getDate();
+    const suffix = ['th', 'st', 'nd', 'rd'][(day % 10 > 3 ? 0 : (day % 100 - day % 10 != 10 ? day % 10 : 0))] || 'th';
+    billingCycleText = `${day}${suffix} of the month`;
+  }
 
   return (
     <div className="content-wrapper">
@@ -219,19 +228,58 @@ export default function StallDetails() {
           </div>
         </div>
 
+        {/* FIXED: CLEARER PAYMENT INDICATORS */}
         <div className="data-panel">
-          <div className="data-header"><h2>Payment Status</h2><span className={`status-badge ${statusClass}`}>{paymentStatus}</span></div>
+          <div className="data-header">
+            <h2>Payment Status</h2>
+            <span className={`status-badge ${statusClass}`}>{paymentStatus}</span>
+          </div>
           <div className="panel-body" style={{ padding: '24px' }}>
-            <div className="info-row"><span className="info-label">Billing Cycle</span><span className="info-value">1st of the month</span></div>
-            <div className="info-row"><span className="info-label">Current Period</span><span className="info-value">{new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></div>
+            
+            <div className="info-row">
+              <span className="info-label">Monthly Due Date</span>
+              <span className="info-value">{billingCycleText}</span>
+            </div>
+
+            <div className="info-row">
+              <span className="info-label">Payment Covers</span>
+              <span className="info-value">
+                {currentPayment?.month_covered 
+                  ? new Date(currentPayment.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                  : new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </span>
+            </div>
+
             {currentPayment ? (
               <>
-                <div className="info-row"><span className="info-label">Amount Due</span><span className="info-value" style={{ fontWeight: 600 }}>₱{Number(currentPayment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                <div className="info-row"><span className="info-label">Due Date</span><span className="info-value">{new Date(currentPayment.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
-                {currentPayment.payment_date && (<div className="info-row"><span className="info-label">Date Paid</span><span className="info-value">{new Date(currentPayment.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>)}
+                <div className="info-row">
+                  <span className="info-label">{currentPayment.status === 'Paid' ? 'Amount Paid' : 'Amount Due'}</span>
+                  <span className="info-value" style={{ fontWeight: 600 }}>
+                    ₱{Number(currentPayment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Next Due Date</span>
+                  <span className="info-value">
+                    {new Date(currentPayment.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </div>
+                {currentPayment.payment_date && (
+                  <div className="info-row">
+                    <span className="info-label">Date Paid</span>
+                    <span className="info-value">
+                      {new Date(currentPayment.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
+                )}
               </>
             ) : (
-              <div className="info-row"><span className="info-label">Amount Due</span><span className="info-value" style={{ fontWeight: 600 }}>₱{Number(stall.monthly_rent).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+              <div className="info-row">
+                <span className="info-label">Amount Due</span>
+                <span className="info-value" style={{ fontWeight: 600 }}>
+                  ₱{Number(stall.monthly_rent).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
             )}
           </div>
         </div>
@@ -296,7 +344,6 @@ export default function StallDetails() {
         </div>
       )}
 
-      {/* Actions */}
       <div className="action-bar">
         {stall.status === 'Vacant' ? (
           <button onClick={handleAssignTenantClick} className="btn-primary">
@@ -304,17 +351,12 @@ export default function StallDetails() {
           </button>
         ) : (
           <>
-            {/* Record Rent Payment is ALLOWED for everyone */}
             <Link to={`/pay-rent?stall=${stall.id}`} className="btn-primary">
               <i className="fa-solid fa-money-bill-wave"></i> Record Rent Payment
             </Link>
-
-            {/* Edit Tenant button with permission check */}
             <button onClick={handleEditTenantClick} className="btn-secondary">
               <i className="fa-solid fa-pen"></i> Edit Tenant
             </button>
-
-            {/* Vacate button with permission check */}
             <button onClick={handleVacateClick} className="btn-danger">
               <i className="fa-solid fa-user-slash"></i> Vacate Stall
             </button>
@@ -322,7 +364,6 @@ export default function StallDetails() {
         )}
       </div>
 
-      {/* Vacate Modal */}
       {vacateModalOpen && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setVacateModalOpen(false) }}>
           <div className="modal-box">
@@ -341,7 +382,6 @@ export default function StallDetails() {
         </div>
       )}
 
-      {/* DELETE PAYMENT MODAL */}
       {deletePaymentModalOpen && selectedPaymentToDelete && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setDeletePaymentModalOpen(false) }}>
           <div className="modal-box">
@@ -363,7 +403,6 @@ export default function StallDetails() {
         </div>
       )}
 
-      {/* SUCCESS POPUP */}
       {showSuccessPopup && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setShowSuccessPopup(false) }}>
           <div className="modal-box" style={{ textAlign: 'center', maxWidth: '400px' }}>
@@ -379,7 +418,6 @@ export default function StallDetails() {
         </div>
       )}
 
-      {/* PERMISSION POPUP - Shows when Treasury clicks blocked buttons */}
       {showPermissionPopup && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setShowPermissionPopup(false) }}>
           <div className="modal-box" style={{ textAlign: 'center', maxWidth: '400px' }}>
