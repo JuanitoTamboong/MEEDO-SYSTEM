@@ -289,22 +289,25 @@ export default function StallMonitoring() {
                           )}
                         </td>
                         <td>
-                          <button 
-                            className="btn-action" 
-                            title="View"
-                            onClick={() => navigate(`/stall-details?stall=${stall.stall_number}`)}
-                          >
-                            <i className="fa-solid fa-eye"></i>
-                          </button>
-                          {stall.tenant_name && stall.payment_status !== 'Paid' && (
+                          {/* FIXED: Wrapped buttons in action-buttons div */}
+                          <div className="action-buttons">
                             <button 
-                              className="btn-action reminder" 
-                              title="Send Reminder" 
-                              onClick={() => navigate(`/send-reminder?stall=${stall.id}`)}
+                              className="btn-action" 
+                              title="View"
+                              onClick={() => navigate(`/stall-details?stall=${stall.stall_number}`)}
                             >
-                              <i className="fa-solid fa-bell"></i>
+                              <i className="fa-solid fa-eye"></i>
                             </button>
-                          )}
+                            {stall.tenant_name && stall.payment_status !== 'Paid' && (
+                              <button 
+                                className="btn-action reminder" 
+                                title="Send Reminder" 
+                                onClick={() => navigate(`/send-reminder?stall=${stall.id}`)}
+                              >
+                                <i className="fa-solid fa-bell"></i>
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -354,20 +357,23 @@ export default function StallMonitoring() {
                       <td style={{ color: '#dc2626' }}>+ ₱{penalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       <td><strong style={{ color: '#dc2626' }}>₱{totalDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
                       <td>
-                        <button 
-                          className="btn-action" 
-                          title="View"
-                          onClick={() => navigate(`/stall-details?stall=${overdue.stall_number}`)}
-                        >
-                          <i className="fa-solid fa-eye"></i>
-                        </button>
-                        <button 
-                          className="btn-action reminder" 
-                          title="Send Notice" 
-                          onClick={() => navigate(`/send-notice?payment=${overdue.id}`)}
-                        >
-                          <i className="fa-solid fa-envelope"></i>
-                        </button>
+                        {/* FIXED: Wrapped buttons in action-buttons div */}
+                        <div className="action-buttons">
+                          <button 
+                            className="btn-action" 
+                            title="View"
+                            onClick={() => navigate(`/stall-details?stall=${overdue.stall_number}`)}
+                          >
+                            <i className="fa-solid fa-eye"></i>
+                          </button>
+                          <button 
+                            className="btn-action reminder" 
+                            title="Send Notice" 
+                            onClick={() => navigate(`/send-notice?payment=${overdue.id}`)}
+                          >
+                            <i className="fa-solid fa-envelope"></i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
