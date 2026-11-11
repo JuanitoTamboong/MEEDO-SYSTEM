@@ -5,11 +5,12 @@ import logo from '../assets/images/meedo-logo.png';
 
 // Import your Supabase client and the custom popup
 import { supabase } from '../supabase/lib/supabase';
+import { recordAuditLog } from '../supabase/lib/audit'; // <-- ADDED THIS IMPORT
 import LoginErrorPopup from '../components/LoginErrorPopup'; 
 
 export default function Login() {
   const [role, setRole] = useState('');
-  const [username, setUsername] = useState(''); // Cleared default for testing
+  const [username, setUsername] = useState(''); 
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   
@@ -24,7 +25,6 @@ export default function Login() {
     setErrorMsg('');
 
     try {
-      // SMART LOGIC: If you type a real email, use it. Otherwise, add @meedo.local
       const email = username.includes('@') ? username : `${username}@meedo.local`;
 
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -36,17 +36,17 @@ export default function Login() {
         setErrorMsg(error.message);
       } else if (data.user) {
         
-        // Optional Security Check: Ensure the Role they selected matches their actual account role
         const actualRole = data.user.user_metadata?.role;
         
         if (actualRole && role !== actualRole) {
-           // If they select the wrong role in the dropdown, reject the login
            await supabase.auth.signOut();
            setErrorMsg(`Access Denied: You are not registered as a ${role}.`);
            return;
         }
 
-        // Login successful! Redirect to dashboard
+        // ---> ADDED THIS LINE RIGHT HERE <---
+        await recordAuditLog('Login', `User signed in successfully as ${actualRole}`);
+
         navigate('/dashboard'); 
       }
     } catch (err) {
