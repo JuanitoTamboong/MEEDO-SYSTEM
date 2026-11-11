@@ -1,13 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase/lib/supabase';
 import logo from '../assets/images/meedo-logo.png';
 import '../css/sidebar.css';
 
-// 1. Define the prop interface
 interface SidebarProps {
   userRole: string;
-  isMobileOpen: boolean; // Receive this from Layout
+  isMobileOpen: boolean; 
 }
 
 export default function Sidebar({ userRole, isMobileOpen }: SidebarProps) {
@@ -15,6 +14,21 @@ export default function Sidebar({ userRole, isMobileOpen }: SidebarProps) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Automatically un-collapse when switching to mobile
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 768) {
+        setIsCollapsed(false);
+      }
+    };
+
+    // Run once on mount
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -25,7 +39,6 @@ export default function Sidebar({ userRole, isMobileOpen }: SidebarProps) {
 
   return (
     <>
-      {/* 2. Apply the 'mobile-open' class based on the prop */}
       <div className={`sidebar ${isCollapsed ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
         
         <div className="sidebar-header">

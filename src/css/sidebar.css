@@ -382,10 +382,6 @@ html {
     to { opacity: 1; transform: scale(1); }
 }
 
-/* =========================================
-   RESPONSIVE ADJUSTMENTS (MOBILE)
-   ========================================= */
-
 /* Base Overlay */
 .sidebar-overlay {
     display: none;
@@ -397,7 +393,9 @@ html {
     .main-content { margin-left: 220px; }
 }
 
-/* Mobile View */
+/* =========================================
+   MOBILE VIEW (Standard Slide-Out Drawer)
+   ========================================= */
 @media (max-width: 768px) {
     /* Fixed white background bar for the main page */
     body::before {
@@ -416,31 +414,44 @@ html {
     }
 
     /* Hide sidebar off-screen by default */
-    .sidebar {
+    .sidebar,
+    .sidebar.collapsed /* <-- OVERRIDE COLLAPSED STATE FOR MOBILE */
+     {
         transform: translateX(-100%);
         width: 260px !important;
         min-width: 260px !important;
         z-index: 10000;
         box-shadow: 4px 0 15px rgba(0,0,0,0.1);
-        
-        /* Solid background */
         background-color: #f1f5f9 !important;
-        
-        /* Pad the top to avoid the logo being cut off */
-        padding-top: 80px; 
+        padding: 80px 16px 20px 16px !important;
     }
 
     /* Slide sidebar in */
-    .sidebar.mobile-open {
+    .sidebar.mobile-open,
+    .sidebar.collapsed.mobile-open {
         transform: translateX(0);
     }
 
-    /* 1. FIX THE DOUBLE XX: Hide the internal desktop toggle completely */
+    /* FORCE SHOW ALL HIDDEN TEXT EVEN IF COLLAPSED CLASS IS ACTIVE */
+    .sidebar.collapsed .logo h2,
+    .sidebar.collapsed ul li a span,
+    .sidebar.collapsed .admin div,
+    .sidebar.collapsed .logout-btn span {
+        display: block !important;
+    }
+    .sidebar.collapsed .admin { justify-content: flex-start !important; padding: 12px 14px !important; }
+    .sidebar.collapsed .admin i { margin: 0 !important; }
+    .sidebar.collapsed .logo img { width: 76px !important; height: 76px !important; }
+    .sidebar.collapsed ul li a { justify-content: flex-start !important; padding: 10px 12px !important; }
+    .sidebar.collapsed ul li a i { width: 22px !important; font-size: 16px !important; }
+    .sidebar.collapsed .logout-btn { padding: 0 !important; }
+
+    /* Hide the internal desktop toggle */
     .sidebar-toggle {
         display: none !important;
     }
 
-    /* 2. Position the floating hamburger button */
+    /* Position the floating hamburger button */
     .mobile-menu-btn {
         display: flex;
         position: fixed;
@@ -460,7 +471,7 @@ html {
         justify-content: center;
     }
 
-    /* 3. When open, make the button a transparent "X" on the top right */
+    /* When open, make the button a transparent "X" on the top right */
     body:has(.sidebar.mobile-open) .mobile-menu-btn {
         left: auto !important;
         right: 15px !important;
@@ -470,12 +481,10 @@ html {
         font-size: 24px !important;
     }
 
-    /* 4. Hide the original hamburger icon when open */
     body:has(.sidebar.mobile-open) .mobile-menu-btn i {
         display: none !important;
     }
 
-    /* 5. Create ONE clean "X" icon */
     body:has(.sidebar.mobile-open) .mobile-menu-btn::after {
         content: "\f00d"; /* FontAwesome X */
         font-family: "Font Awesome 7 Free", "Font Awesome 6 Free" !important;
@@ -497,6 +506,6 @@ html {
 
 /* Small Mobile View */
 @media (max-width: 480px) {
-    .sidebar { width: 260px !important; min-width: 260px !important; }
+    .sidebar, .sidebar.collapsed { width: 260px !important; min-width: 260px !important; }
     .logout-modal-buttons { flex-direction: column; }
 }
