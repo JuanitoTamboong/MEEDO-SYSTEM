@@ -9,24 +9,36 @@ export default function StallDetails() {
   const navigate = useNavigate();
   const stallNumber = searchParams.get('stall');
 
+  // Get User Role
+  const [userRole, setUserRole] = useState<string | null>(null);
+
   const [stall, setStall] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
   const [currentPayment, setCurrentPayment] = useState<any>(null);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   
-  // Loading & Error States
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Modals
   const [vacateModalOpen, setVacateModalOpen] = useState(false);
   const [deletePaymentModalOpen, setDeletePaymentModalOpen] = useState(false);
   const [selectedPaymentToDelete, setSelectedPaymentToDelete] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Success Popup State
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // NEW: State for Permission Popup
+  const [showPermissionPopup, setShowPermissionPopup] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState('');
+
+  useEffect(() => {
+    async function getUserRole() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserRole(user?.user_metadata?.role || 'Treasury');
+    }
+    getUserRole();
+  }, []);
 
   useEffect(() => {
     if (!stallNumber) {
@@ -74,6 +86,15 @@ export default function StallDetails() {
 
   const handleVacate = async () => {
     if (!stall || !tenant) return;
+    
+    // Only Admin can actually vacate
+    if (userRole !== 'Administrator' && userRole !== 'Meedo Personnel') {
+      setVacateModalOpen(false);
+      setPermissionMessage("Only Administrators and Meedo Personnel can vacate a stall.");
+      setShowPermissionPopup(true);
+      return;
+    }
+
     try {
       await supabase.from('tenants').update({ status: 'inactive' }).eq('id', tenant.id);
       await supabase.from('stalls').update({ status: 'Vacant', tenant_name: null }).eq('id', stall.id);
@@ -98,18 +119,14 @@ export default function StallDetails() {
         selectedPaymentToDelete.id
       );
 
-      // Show Success Popup
       setSuccessMessage(`Payment for ${new Date(selectedPaymentToDelete.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} has been deleted.`);
       setShowSuccessPopup(true);
       
-      // Close the delete confirmation modal
       setDeletePaymentModalOpen(false);
       setSelectedPaymentToDelete(null);
       
-      // Refresh the data
       fetchData();
 
-      // Hide the success popup after 3 seconds
       setTimeout(() => {
         setShowSuccessPopup(false);
       }, 3000);
@@ -121,7 +138,35 @@ export default function StallDetails() {
     }
   };
 
-  if (isLoading) {
+  // HANDLERS for Permissions
+  const handleEditTenantClick = () => {
+    if (userRole === 'Administrator' || userRole === 'Meedo Personnel') {
+      navigate(`/edit-tenant?id=${tenant?.id}`);
+    } else {
+      setPermissionMessage("Only Administrators and Meedo Personnel can edit tenant details.");
+      setShowPermissionPopup(true);
+    }
+  };
+
+  const handleVacateClick = () => {
+    if (userRole === 'Administrator' || userRole === 'Meedo Personnel') {
+      setVacateModalOpen(true);
+    } else {
+      setPermissionMessage("Only Administrators and Meedo Personnel can vacate a stall.");
+      setShowPermissionPopup(true);
+    }
+  };
+
+  const handleAssignTenantClick = () => {
+    if (userRole === 'Administrator' || userRole === 'Meedo Personnel') {
+      navigate(`/register-tenant?stall=${stall.stall_number}`);
+    } else {
+      setPermissionMessage("Only Administrators and Meedo Personnel can assign tenants.");
+      setShowPermissionPopup(true);
+    }
+  };
+
+  if (isLoading || userRole === null) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%', background: '#f8fafc' }}>
         <div style={{ width: '48px', height: '48px', border: '4px solid #e2e8f0', borderTop: '4px solid #3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
@@ -146,7 +191,6 @@ export default function StallDetails() {
   return (
     <div className="content-wrapper">
       
-      {/* Header */}
       <div className="page-header">
         <div>
           <h1>Stall Details</h1>
@@ -157,10 +201,7 @@ export default function StallDetails() {
         </div>
       </div>
 
-      {/* Top Grid */}
       <div className="details-grid">
-        
-        {/* Stall Profile */}
         <div className="data-panel">
           <div className="data-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
             <div>
@@ -178,7 +219,6 @@ export default function StallDetails() {
           </div>
         </div>
 
-        {/* Payment Status */}
         <div className="data-panel">
           <div className="data-header"><h2>Payment Status</h2><span className={`status-badge ${statusClass}`}>{paymentStatus}</span></div>
           <div className="panel-body" style={{ padding: '24px' }}>
@@ -197,7 +237,6 @@ export default function StallDetails() {
         </div>
       </div>
 
-      {/* Tenant Info */}
       {tenant && (
         <div className="data-panel" style={{ marginBottom: '24px' }}>
           <div className="data-header"><h2>Tenant Information</h2></div>
@@ -214,7 +253,6 @@ export default function StallDetails() {
         </div>
       )}
 
-      {/* Payment History */}
       {paymentHistory.length > 0 && (
         <div className="data-panel">
           <div className="data-header"><h2>Payment History</h2></div>
@@ -261,12 +299,25 @@ export default function StallDetails() {
       {/* Actions */}
       <div className="action-bar">
         {stall.status === 'Vacant' ? (
-          <Link to={`/register-tenant?stall=${stall.stall_number}`} className="btn-primary"><i className="fa-solid fa-user-plus"></i> Assign Tenant</Link>
+          <button onClick={handleAssignTenantClick} className="btn-primary">
+            <i className="fa-solid fa-user-plus"></i> Assign Tenant
+          </button>
         ) : (
           <>
-            <Link to={`/pay-rent?stall=${stall.id}`} className="btn-primary"><i className="fa-solid fa-money-bill-wave"></i> Record Rent Payment</Link>
-            <Link to={`/edit-tenant?id=${tenant?.id}`} className="btn-secondary"><i className="fa-solid fa-pen"></i> Edit Tenant</Link>
-            <button className="btn-danger" onClick={() => setVacateModalOpen(true)}><i className="fa-solid fa-user-slash"></i> Vacate Stall</button>
+            {/* Record Rent Payment is ALLOWED for everyone */}
+            <Link to={`/pay-rent?stall=${stall.id}`} className="btn-primary">
+              <i className="fa-solid fa-money-bill-wave"></i> Record Rent Payment
+            </Link>
+
+            {/* Edit Tenant button with permission check */}
+            <button onClick={handleEditTenantClick} className="btn-secondary">
+              <i className="fa-solid fa-pen"></i> Edit Tenant
+            </button>
+
+            {/* Vacate button with permission check */}
+            <button onClick={handleVacateClick} className="btn-danger">
+              <i className="fa-solid fa-user-slash"></i> Vacate Stall
+            </button>
           </>
         )}
       </div>
@@ -290,7 +341,7 @@ export default function StallDetails() {
         </div>
       )}
 
-      {/* DELETE PAYMENT CONFIRMATION MODAL */}
+      {/* DELETE PAYMENT MODAL */}
       {deletePaymentModalOpen && selectedPaymentToDelete && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setDeletePaymentModalOpen(false) }}>
           <div className="modal-box">
@@ -312,7 +363,7 @@ export default function StallDetails() {
         </div>
       )}
 
-      {/* SUCCESS POPUP (After Deletion) */}
+      {/* SUCCESS POPUP */}
       {showSuccessPopup && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setShowSuccessPopup(false) }}>
           <div className="modal-box" style={{ textAlign: 'center', maxWidth: '400px' }}>
@@ -320,17 +371,25 @@ export default function StallDetails() {
               <i className="fa-solid fa-check" style={{ fontSize: '24px' }}></i>
             </div>
             <h3 style={{ fontSize: '20px', marginBottom: '8px' }}>Payment Deleted</h3>
-            <p style={{ fontSize: '15px', color: '#64748b', marginBottom: '24px' }}>
-              {successMessage}
-            </p>
+            <p style={{ fontSize: '15px', color: '#64748b', marginBottom: '24px' }}>{successMessage}</p>
             <div className="modal-actions">
-              <button 
-                className="btn-primary" 
-                style={{ width: '100%', justifyContent: 'center' }}
-                onClick={() => setShowSuccessPopup(false)}
-              >
-                Okay
-              </button>
+              <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setShowSuccessPopup(false)}>Okay</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PERMISSION POPUP - Shows when Treasury clicks blocked buttons */}
+      {showPermissionPopup && (
+        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setShowPermissionPopup(false) }}>
+          <div className="modal-box" style={{ textAlign: 'center', maxWidth: '400px' }}>
+            <div className="modal-icon danger-icon" style={{ margin: '0 auto 16px', borderRadius: '50%', width: '56px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <i className="fa-solid fa-lock" style={{ fontSize: '24px' }}></i>
+            </div>
+            <h3 style={{ fontSize: '20px', marginBottom: '8px' }}>Access Denied</h3>
+            <p style={{ fontSize: '15px', color: '#64748b', marginBottom: '24px' }}>{permissionMessage}</p>
+            <div className="modal-actions">
+              <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setShowPermissionPopup(false)}>Okay</button>
             </div>
           </div>
         </div>

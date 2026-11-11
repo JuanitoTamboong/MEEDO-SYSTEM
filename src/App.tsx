@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
+import { supabase } from './supabase/lib/supabase';
+
 import Login from './pages/login';
 import Dashboard from './pages/Dashboard';
 import StallMonitoring from './pages/StallMonitoring'; 
@@ -12,7 +14,7 @@ import SendNotice from './pages/SendNotice';
 import EditTenant from './pages/EditTenant';
 import FinancialReports from './pages/FinancialReports';
 import Contracts from './pages/Contracts';
-import ActivityLogs from './pages/ActivityLogs'; // 1. Import ActivityLogs
+import ActivityLogs from './pages/ActivityLogs';
 import Layout from './components/Layout';
 
 class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -39,6 +41,29 @@ class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean,
   }
 }
 
+// Role Protection Component
+function RoleProtectedRoute({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) {
+  const [role, setRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function checkRole() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setRole(user?.user_metadata?.role || '');
+      setLoading(false);
+    }
+    checkRole();
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
+
+  if (!role || !allowedRoles.includes(role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -46,21 +71,40 @@ function App() {
         <Routes>
           <Route path="/" element={<Login />} />
           
-          {/* Protected Routes inside Layout */}
           <Route element={<Layout />}>
+            {/* Accessible by Everyone (Including Treasury) */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/stall-monitoring" element={<StallMonitoring />} /> 
-            <Route path="/manage-stalls" element={<ManageStalls />} /> 
-            <Route path="/register-tenant" element={<RegisterTenant />} /> 
             <Route path="/stall-details" element={<StallDetails />} /> 
+            <Route path="/financial-reports" element={<FinancialReports />} /> 
+            <Route path="/logs" element={<ActivityLogs />} /> 
+            
+            {/* Treasury CAN Access these */}
             <Route path="/pay-rent" element={<PayRent />} /> 
             <Route path="/send-reminder" element={<SendReminder />} /> 
             <Route path="/send-notice" element={<SendNotice />} /> 
-            <Route path="/edit-tenant" element={<EditTenant />} /> 
-            <Route path="/financial-reports" element={<FinancialReports />} /> 
-            <Route path="/contracts" element={<Contracts />} /> 
-            {/* 2. Add the ActivityLogs route here */}
-            <Route path="/logs" element={<ActivityLogs />} /> 
+            
+            {/* Accessible ONLY by Admin and Meedo Personnel */}
+            <Route path="/manage-stalls" element={
+              <RoleProtectedRoute allowedRoles={['Administrator', 'Meedo Personnel']}>
+                <ManageStalls />
+              </RoleProtectedRoute>
+            } /> 
+            <Route path="/register-tenant" element={
+              <RoleProtectedRoute allowedRoles={['Administrator', 'Meedo Personnel']}>
+                <RegisterTenant />
+              </RoleProtectedRoute>
+            } /> 
+            <Route path="/edit-tenant" element={
+              <RoleProtectedRoute allowedRoles={['Administrator', 'Meedo Personnel']}>
+                <EditTenant />
+              </RoleProtectedRoute>
+            } /> 
+            <Route path="/contracts" element={
+              <RoleProtectedRoute allowedRoles={['Administrator', 'Meedo Personnel']}>
+                <Contracts />
+              </RoleProtectedRoute>
+            } /> 
           </Route>
           
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -87,7 +87,40 @@ export default function SendNotice() {
     setTimeout(() => setCopied(false), 3000);
   };
 
-  if (isLoading) return <div style={{padding: '40px'}}>Loading...</div>;
+  // ==========================================
+  // BEAUTIFUL CENTERED LOADING SCREEN
+  // ==========================================
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        minHeight: '100vh', 
+        width: '100%',
+        background: '#f8fafc' 
+      }}>
+        <div style={{ 
+          width: '48px', 
+          height: '48px', 
+          border: '4px solid #e2e8f0', 
+          borderTop: '4px solid #3b82f6', 
+          borderRadius: '50%', 
+          animation: 'spin 1s linear infinite' 
+        }}></div>
+        <p style={{ marginTop: '20px', color: '#64748b', fontSize: '15px', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
+          Loading overdue notice...
+        </p>
+        <style>{`
+          @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="content-wrapper">
