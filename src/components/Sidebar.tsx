@@ -4,7 +4,13 @@ import { supabase } from '../supabase/lib/supabase';
 import logo from '../assets/images/meedo-logo.png';
 import '../css/sidebar.css';
 
-export default function Sidebar({ userRole }: { userRole: string }) {
+// 1. Define the prop interface
+interface SidebarProps {
+  userRole: string;
+  isMobileOpen: boolean; // Receive this from Layout
+}
+
+export default function Sidebar({ userRole, isMobileOpen }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const location = useLocation();
@@ -19,12 +25,12 @@ export default function Sidebar({ userRole }: { userRole: string }) {
 
   return (
     <>
-      <div className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+      {/* 2. Apply the 'mobile-open' class based on the prop */}
+      <div className={`sidebar ${isCollapsed ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
         
         <div className="sidebar-header">
           <div className="logo">
             <img src={logo} alt="MEEDO Logo" />
-            {/* Make sure this h2 tag is here! */}
             <h2>MEEDO</h2> 
           </div>
           <button 

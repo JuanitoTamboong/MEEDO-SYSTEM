@@ -1,0 +1,254 @@
+/* src/index.css */
+
+/* =========================================
+   1. GLOBAL RESET & FONTS
+   ========================================= */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+:root {
+    /* Global Color Variables */
+    --primary-blue: #3b82f6;
+    --primary-green: #10b981;
+    --danger-red: #ef4444;
+    --warning-orange: #f97316;
+    --text-dark: #0f172a;
+    --text-gray: #64748b;
+    --bg-light: #f8fafc;
+    --border-color: #e2e8f0;
+}
+
+body {
+    background-color: var(--bg-light);
+    color: var(--text-dark);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* =========================================
+   2. SHARED PAGE STRUCTURE
+   ========================================= */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.page-header h1 {
+    font-size: 24px;
+    color: var(--text-dark);
+    font-weight: 600;
+    letter-spacing: -0.5px;
+}
+
+.page-header p {
+    color: var(--text-gray);
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+/* =========================================
+   3. SHARED BUTTONS
+   ========================================= */
+.btn-primary {
+    background: var(--primary-blue);
+    color: white;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.btn-primary:hover { background: #2563eb; }
+
+.btn-secondary {
+    background: white;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    padding: 9px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover { background: #f1f5f9; }
+
+.btn-danger {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    padding: 9px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.btn-danger:hover { background: #fee2e2; }
+
+/* =========================================
+   4. SHARED BADGES & TABLES
+   ========================================= */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px; 
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.status-active, .status-paid, .status-available { background: #ecfdf5; color: #059669; }
+.status-pending { background: #fffbeb; color: #d97706; }
+.status-overdue, .status-expired { background: #fef2f2; color: #dc2626; }
+
+/* Shared Table Styles */
+.table-responsive {
+    overflow-x: auto;
+    background: #ffffff;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    text-align: center;
+}
+
+th {
+    background: var(--bg-light); 
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 16px 12px;
+    border-bottom: 2px solid var(--border-color); 
+    letter-spacing: 0.5px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+td {
+    padding: 16px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 14px;
+    color: var(--text-dark);
+    vertical-align: middle;
+    text-align: center;
+    background: #ffffff;
+}
+
+tbody tr:hover td {
+    background-color: var(--bg-light);
+}
+
+/* =========================================
+   5. SHARED MODALS
+   ========================================= */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.modal-backdrop.active {
+    display: flex;
+}
+
+.modal-box {
+    background: white;
+    width: 100%;
+    max-width: 400px;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* =========================================
+   6. RESPONSIVE ADJUSTMENTS (MOBILE VIEW)
+   ========================================= */
+
+/* Tablet View (Screens smaller than 1024px) */
+@media (max-width: 1024px) {
+    .page-header h1 {
+        font-size: 22px;
+    }
+}
+
+/* Mobile View (Screens smaller than 768px) */
+@media (max-width: 768px) {
+    /* Stack header items vertically */
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    /* Force the table container to scroll horizontally */
+    .table-responsive {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    /* Make sure the table keeps a minimum width so columns don't squash */
+    table {
+        min-width: 800px; 
+        table-layout: auto;
+    }
+
+    /* Adjust font sizes for mobile */
+    th, td {
+        font-size: 12px;
+        padding: 12px 8px;
+    }
+
+    /* Make modals full width on small screens */
+    .modal-box {
+        max-width: 90%;
+        padding: 20px;
+    }
+}
+
+/* Small Mobile View (Screens smaller than 480px) */
+@media (max-width: 480px) {
+    .page-header h1 {
+        font-size: 20px;
+    }
+    
+    /* Make all buttons stretch to full width */
+    .btn-primary, .btn-secondary, .btn-danger {
+        width: 100%;
+        justify-content: center;
+    }
+}

@@ -19,7 +19,7 @@ html {
     min-width: 260px !important;
     max-width: 260px !important;
     height: 100vh;
-    background: #f1f5f9 !important; 
+    background: #f1f5f9 !important;
     padding: 20px 16px;
     border-right: 1px solid #e2e8f0;
     display: flex;
@@ -32,7 +32,8 @@ html {
     overflow-x: hidden;
     font-family: 'Inter', sans-serif !important;
     box-sizing: border-box;
-    z-index: 1000;
+    z-index: 10000;
+    transition: transform 0.3s ease-in-out, width 0.25s ease;
 }
 
 .sidebar::-webkit-scrollbar { width: 0; display: none; }
@@ -54,6 +55,7 @@ html {
     min-height: 110px;
 }
 
+/* Desktop collapse button */
 .sidebar-toggle {
     position: absolute;
     top: 0;
@@ -79,7 +81,6 @@ html {
     color: #0f172a !important;
 }
 
-/* Clean Logo Container */
 .sidebar .logo {
     display: flex;
     flex-direction: column;
@@ -93,7 +94,6 @@ html {
     padding: 0 !important;
 }
 
-/* EXPANDED LOGO */
 .sidebar .logo img {
     width: 76px !important;
     height: 76px !important;
@@ -160,7 +160,7 @@ html {
     transform: translateY(-50%) scaleY(0);
     width: 3px;
     height: 20px;
-    background: #10b981; 
+    background: #10b981;
     border-radius: 0 4px 4px 0;
     transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -177,7 +177,7 @@ html {
 /* ACTIVE STATE */
 .sidebar ul li.active a,
 .sidebar ul li.active > a {
-    background: #ffffff !important; 
+    background: #ffffff !important;
     color: #0f172a !important;
     font-weight: 600 !important;
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
@@ -185,7 +185,7 @@ html {
 
 .sidebar ul li.active a i,
 .sidebar ul li.active > a i {
-    color: #10b981 !important; 
+    color: #10b981 !important;
 }
 
 .sidebar ul li.active a .active-line {
@@ -201,21 +201,19 @@ html {
     padding: 12px 14px;
     display: flex;
     gap: 12px;
-    align-items: center; 
+    align-items: center;
     margin-bottom: 12px;
     box-shadow: 0 1px 2px rgba(0,0,0,0.02);
     transition: all 0.2s;
 }
 
-.sidebar .admin:hover {
-    border-color: #cbd5e1;
-}
+.sidebar .admin:hover { border-color: #cbd5e1; }
 
 .sidebar .admin i {
     width: 36px;
     height: 36px;
-    background: #ecfdf5; 
-    color: #10b981 !important; 
+    background: #ecfdf5;
+    color: #10b981 !important;
     border-radius: 50%;
     display: flex !important;
     align-items: center !important;
@@ -270,17 +268,11 @@ html {
     transition: all 0.2s;
 }
 
-.sidebar .logout-btn i {
-    font-size: 14px !important;
-}
-
-.sidebar .logout-btn:hover {
-    background: #fee2e2;
-    color: #b91c1c;
-}
+.sidebar .logout-btn i { font-size: 14px !important; }
+.sidebar .logout-btn:hover { background: #fee2e2; color: #b91c1c; }
 
 /* =========================================
-   COLLAPSED STATE (PERFECTLY STACKED)
+   COLLAPSED STATE (Desktop Only)
    ========================================= */
 .sidebar.collapsed {
     width: 72px !important;
@@ -289,32 +281,29 @@ html {
     padding-right: 12px;
 }
 
-.sidebar.collapsed .sidebar-header { 
-    margin-bottom: 16px; 
-    min-height: auto; /* Let content dictate height when collapsed */
+.sidebar.collapsed .sidebar-header {
+    margin-bottom: 16px;
+    min-height: auto;
     justify-content: flex-start;
     padding-top: 0;
-    gap: 16px; /* Adds space between toggle button and logo */
+    gap: 16px;
 }
 
-/* HIDES TEXT WHEN COLLAPSED */
 .sidebar.collapsed .logo h2,
 .sidebar.collapsed ul li a span,
 .sidebar.collapsed .admin div,
-.sidebar.collapsed .logout-btn span { 
-    display: none !important; 
+.sidebar.collapsed .logout-btn span {
+    display: none !important;
 }
 
-/* STACK THE BUTTON ON TOP */
 .sidebar.collapsed .sidebar-toggle {
-    position: relative; /* Removes absolute positioning */
+    position: relative;
     top: auto;
     right: auto;
     transform: none;
-    margin: 0 auto; /* Centers the button */
+    margin: 0 auto;
 }
 
-/* CENTER THE LOGO BELOW THE BUTTON */
 .sidebar.collapsed .logo {
     display: flex;
     justify-content: center;
@@ -331,33 +320,17 @@ html {
     margin: 0 auto !important;
 }
 
-.sidebar.collapsed ul li a {
-    justify-content: center;
-    padding: 12px 0;
-}
+.sidebar.collapsed ul li a { justify-content: center; padding: 12px 0; }
+.sidebar.collapsed ul li a i { width: auto; font-size: 18px; }
+.sidebar.collapsed .admin { justify-content: center; padding: 8px; }
+.sidebar.collapsed .admin i { margin: 0; width: 32px; height: 32px; }
+.sidebar.collapsed .logout-btn { padding: 10px 0; }
 
-.sidebar.collapsed ul li a i {
-    width: auto;
-    font-size: 18px;
-}
-
-.sidebar.collapsed .admin {
-    justify-content: center;
-    padding: 8px;
-}
-
-.sidebar.collapsed .admin i {
-    margin: 0;
-    width: 32px;
-    height: 32px;
-}
-
-.sidebar.collapsed .logout-btn { 
-    padding: 10px 0; 
-}
-
-body:has(.sidebar.collapsed) .main-content {
-    margin-left: 72px;
+/* Collapsed margin — desktop only */
+@media (min-width: 769px) {
+    body:has(.sidebar.collapsed) .main-content {
+        margin-left: 72px;
+    }
 }
 
 /* LOGOUT MODAL */
@@ -365,7 +338,7 @@ body:has(.sidebar.collapsed) .main-content {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(15, 23, 42, 0.5);
-    display: none; justify-content: center; align-items: center; z-index: 9999;
+    display: none; justify-content: center; align-items: center; z-index: 99999;
 }
 
 .logout-modal.show { display: flex !important; }
@@ -409,23 +382,121 @@ body:has(.sidebar.collapsed) .main-content {
     to { opacity: 1; transform: scale(1); }
 }
 
-/* Responsive Adjustments */
+/* =========================================
+   RESPONSIVE ADJUSTMENTS (MOBILE)
+   ========================================= */
+
+/* Base Overlay */
+.sidebar-overlay {
+    display: none;
+}
+
+/* Tablet View */
 @media (max-width: 1024px) {
     .sidebar { width: 220px !important; min-width: 220px !important; }
     .main-content { margin-left: 220px; }
 }
 
+/* Mobile View */
 @media (max-width: 768px) {
-    .sidebar { width: 180px !important; min-width: 180px !important; }
-    .main-content { margin-left: 180px; }
-    .sidebar ul li a { font-size: 13px; padding: 8px 10px; }
+    /* Fixed white background bar for the main page */
+    body::before {
+        content: "";
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 72px;
+        background: #ffffff;
+        border-bottom: 1px solid #e2e8f0;
+        z-index: 999;
+    }
+
+    .main-content {
+        margin-left: 0 !important;
+        padding-top: 80px !important;
+        transition: none;
+    }
+
+    /* Hide sidebar off-screen by default */
+    .sidebar {
+        transform: translateX(-100%);
+        width: 260px !important;
+        min-width: 260px !important;
+        z-index: 10000;
+        box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+        
+        /* Solid background */
+        background-color: #f1f5f9 !important;
+        
+        /* Pad the top to avoid the logo being cut off */
+        padding-top: 80px; 
+    }
+
+    /* Slide sidebar in */
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+
+    /* 1. FIX THE DOUBLE XX: Hide the internal desktop toggle completely */
+    .sidebar-toggle {
+        display: none !important;
+    }
+
+    /* 2. Position the floating hamburger button */
+    .mobile-menu-btn {
+        display: flex;
+        position: fixed;
+        top: 15px;
+        left: 15px;
+        z-index: 10001;
+        width: 42px;
+        height: 42px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        color: #0f172a;
+        font-size: 20px;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* 3. When open, make the button a transparent "X" on the top right */
+    body:has(.sidebar.mobile-open) .mobile-menu-btn {
+        left: auto !important;
+        right: 15px !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        font-size: 24px !important;
+    }
+
+    /* 4. Hide the original hamburger icon when open */
+    body:has(.sidebar.mobile-open) .mobile-menu-btn i {
+        display: none !important;
+    }
+
+    /* 5. Create ONE clean "X" icon */
+    body:has(.sidebar.mobile-open) .mobile-menu-btn::after {
+        content: "\f00d"; /* FontAwesome X */
+        font-family: "Font Awesome 7 Free", "Font Awesome 6 Free" !important;
+        font-weight: 900 !important;
+        display: block;
+    }
+
+    /* Overlay background */
+    .sidebar-overlay.active {
+        display: block;
+        position: fixed;
+        top: 0; right: 0; bottom: 0; left: 0;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        z-index: 9999;
+        backdrop-filter: blur(2px);
+    }
 }
 
+/* Small Mobile View */
 @media (max-width: 480px) {
-    .sidebar { width: 64px !important; min-width: 64px !important; padding: 12px 8px; }
-    .main-content { margin-left: 64px; }
-    .sidebar .logo h2, .sidebar ul li a span, .sidebar .admin div, .sidebar .logout-btn span { display: none; }
-    .sidebar ul li a { justify-content: center; }
-    .sidebar-toggle { display: none; }
+    .sidebar { width: 260px !important; min-width: 260px !important; }
     .logout-modal-buttons { flex-direction: column; }
 }
