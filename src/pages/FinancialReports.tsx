@@ -40,9 +40,9 @@ export default function FinancialReports() {
   }, [selectedMonth, selectedYear]);
 
   async function fetchYears() {
-    const { data } = await supabase.from('payments').select('payment_date').not('payment_date', 'is', null);
+    const { data } = await supabase.from('payments').select('month_covered').not('month_covered', 'is', null);
     if (data) {
-      const years = [...new Set(data.map(p => new Date(p.payment_date!).getFullYear()))];
+      const years = [...new Set(data.map(p => new Date(p.month_covered!).getFullYear()))];
       if (years.length === 0) years.push(new Date().getFullYear());
       setAvailableYears(years.sort((a, b) => b - a));
     }
@@ -54,7 +54,7 @@ export default function FinancialReports() {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
 
-      // 1. Fetch Stalls, Sections, and TENANTS (Real Data)
+      // 1. Fetch Stalls, Sections, and Tenants
       const { data: stallsData } = await supabase.from('stalls').select('id, stall_number, section_id');
       const { data: sectionsData } = await supabase.from('sections').select('id, section_name');
       const { data: tenantsData } = await supabase.from('tenants').select('stall_id, full_name').eq('status', 'active');
@@ -63,20 +63,19 @@ export default function FinancialReports() {
       const sectionMap = new Map(sectionsData?.map(s => [s.id, s]) || []);
       const tenantMap = new Map(tenantsData?.map(t => [t.stall_id, t.full_name]) || []);
 
-      // 2. Fetch Monthly Paid Payments
+      // 2. Fetch Monthly Paid Payments (Filtered by month_covered)
       const { data: paidData } = await supabase
         .from('payments')
         .select('*')
         .eq('status', 'Paid')
-        .gte('payment_date', startDate)
-        .lte('payment_date', endDate)
+        .gte('month_covered', startDate)
+        .lte('month_covered', endDate)
         .order('payment_date', { ascending: false });
 
       if (paidData) {
         const enriched = paidData.map(p => {
           const stall = stallMap.get(p.stall_id);
           const section = stall ? sectionMap.get(stall.section_id) : null;
-          // Pull the real tenant name from the Tenants table, fallback to payments table
           const realTenantName = tenantMap.get(p.stall_id) || p.tenant_name;
           
           return { 
@@ -92,6 +91,11 @@ export default function FinancialReports() {
         const total = enriched.reduce((sum, p) => sum + Number(p.amount), 0);
         setTotalCollections(total);
         setAvgPayment(enriched.length > 0 ? total / enriched.length : 0);
+      } else {
+        setMonthlyPayments([]);
+        setPaymentCount(0);
+        setTotalCollections(0);
+        setAvgPayment(0);
       }
 
       // 3. Fetch Occupied Stalls (Collection Rate)
@@ -122,20 +126,20 @@ export default function FinancialReports() {
         setOverduePayments(enrichedOverdue);
       }
 
-      // 5. Fetch Annual Data
+      // 5. Fetch Annual Data (Filtered by month_covered)
       const { data: annualRaw } = await supabase
         .from('payments')
-        .select('amount, payment_date')
+        .select('amount, month_covered')
         .eq('status', 'Paid')
-        .gte('payment_date', `${selectedYear}-01-01`)
-        .lte('payment_date', `${selectedYear}-12-31`);
+        .gte('month_covered', `${selectedYear}-01-01`)
+        .lte('month_covered', `${selectedYear}-12-31`);
 
       if (annualRaw) {
         const grouped: Record<number, { total: number, count: number }> = {};
         let runningTotal = 0;
 
         annualRaw.forEach(p => {
-          const month = new Date(p.payment_date!).getMonth() + 1;
+          const month = new Date(p.month_covered!).getMonth() + 1;
           if (!grouped[month]) grouped[month] = { total: 0, count: 0 };
           grouped[month].total += Number(p.amount);
           grouped[month].count += 1;
@@ -291,7 +295,6 @@ export default function FinancialReports() {
                       <tr key={p.id}>
                         <td>{new Date(p.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                         <td><strong>{p.stall_number || '—'}</strong></td>
-                        {/* NOW USING REAL DATA */}
                         <td>{p.display_tenant_name || '—'}</td>
                         <td>{p.section_name || '—'}</td>
                         <td style={{ fontWeight: 600, color: '#0f172a' }}>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
@@ -401,7 +404,6 @@ export default function FinancialReports() {
                       return (
                         <tr key={o.id}>
                           <td><strong style={{ color: '#dc2626' }}>{o.stall_number || '—'}</strong></td>
-                          {/* NOW USING REAL DATA */}
                           <td>{o.display_tenant_name || '—'}</td>
                           <td>{o.section_name || '—'}</td>
                           <td>₱{Number(o.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
