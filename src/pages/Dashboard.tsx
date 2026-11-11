@@ -9,68 +9,86 @@ export default function Dashboard() {
     stalls: 0, occupied: 0, vacant: 0, tenants: 0, paid: 0, overdue: 0
   });
   const [recentStalls, setRecentStalls] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true); // ADDED LOADING STATE
 
   useEffect(() => {
     async function loadData() {
-      // 1. Fetch Stalls
-      const { data: stallsData } = await supabase.from('stalls').select('status');
-      
-      // 2. Fetch Active Tenants
-      const { count: tenantCount } = await supabase
-        .from('tenants')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'active');
+      setIsLoading(true); // Start loading
+      try {
+        // 1. Fetch Stalls
+        const { data: stallsData } = await supabase.from('stalls').select('status');
+        
+        // 2. Fetch Active Tenants
+        const { count: tenantCount } = await supabase
+          .from('tenants')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'active');
 
-      // 3. Fetch Current Month Payments (This was missing!)
-      const currentMonth = new Date().toISOString().slice(0, 7) + '-01'; // e.g., "2026-11-01"
-      const { data: paymentsData } = await supabase
-        .from('payments')
-        .select('stall_id, status')
-        .gte('month_covered', currentMonth)
-        .lte('month_covered', currentMonth);
-      
-      // 4. Fetch Recent Stalls
-      const { data: recent } = await supabase
-        .from('stalls')
-        .select('stall_number, status, tenant_name, sections(section_name)')
-        .order('created_at', { ascending: false })
-        .limit(5);
-      
-      // Calculate Metrics
-      if (stallsData) {
-        const occupied = stallsData.filter(s => s.status === 'Occupied').length;
+        // 3. Fetch Current Month Payments
+        const currentMonth = new Date().toISOString().slice(0, 7) + '-01'; 
+        const { data: paymentsData } = await supabase
+          .from('payments')
+          .select('stall_id, status')
+          .gte('month_covered', currentMonth)
+          .lte('month_covered', currentMonth);
         
-        let paidCount = 0;
-        let overdueCount = 0;
+        // 4. Fetch Recent Stalls
+        const { data: recent } = await supabase
+          .from('stalls')
+          .select('stall_number, status, tenant_name, sections(section_name)')
+          .order('created_at', { ascending: false })
+          .limit(5);
         
-        if (paymentsData) {
-          // Use a Set to count unique stalls (in case there are duplicates)
-          const paidStalls = new Set();
-          const overdueStalls = new Set();
+        // Calculate Metrics
+        if (stallsData) {
+          const occupied = stallsData.filter(s => s.status === 'Occupied').length;
           
-          paymentsData.forEach(p => {
-            if (p.status === 'Paid') paidStalls.add(p.stall_id);
-            if (p.status === 'Overdue') overdueStalls.add(p.stall_id);
+          let paidCount = 0;
+          let overdueCount = 0;
+          
+          if (paymentsData) {
+            const paidStalls = new Set();
+            const overdueStalls = new Set();
+            
+            paymentsData.forEach(p => {
+              if (p.status === 'Paid') paidStalls.add(p.stall_id);
+              if (p.status === 'Overdue') overdueStalls.add(p.stall_id);
+            });
+            
+            paidCount = paidStalls.size;
+            overdueCount = overdueStalls.size;
+          }
+
+          setOverview({
+            stalls: stallsData.length,
+            occupied: occupied,
+            vacant: stallsData.length - occupied,
+            tenants: tenantCount || 0,
+            paid: paidCount,
+            overdue: overdueCount,
           });
-          
-          paidCount = paidStalls.size;
-          overdueCount = overdueStalls.size;
         }
 
-        setOverview({
-          stalls: stallsData.length,
-          occupied: occupied,
-          vacant: stallsData.length - occupied,
-          tenants: tenantCount || 0,
-          paid: paidCount,
-          overdue: overdueCount,
-        });
+        if (recent) setRecentStalls(recent);
+      } catch (error) {
+        console.error("Error loading dashboard data:", error);
+      } finally {
+        setIsLoading(false); // Stop loading
       }
-
-      if (recent) setRecentStalls(recent);
     }
     loadData();
   }, []);
+
+  // --- ADDED LOADING SCREEN ---
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', width: '100%' }}>
+        <div style={{ width: '48px', height: '48px', border: '4px solid #e2e8f0', borderTop: '4px solid #3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <p style={{ marginTop: '20px', color: '#64748b', fontSize: '15px', fontWeight: 500 }}>Loading dashboard...</p>
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="content-wrapper">

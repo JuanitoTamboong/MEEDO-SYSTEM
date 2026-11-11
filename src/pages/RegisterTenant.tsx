@@ -30,6 +30,7 @@ export default function RegisterTenant() {
   });
 
   // Status State
+  const [isLoading, setIsLoading] = useState(true); // ADDED LOADING STATE
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -39,32 +40,39 @@ export default function RegisterTenant() {
   }, []);
 
   async function fetchData() {
-    // 1. Fetch Metrics
-    const { count: tenantsCount } = await supabase
-      .from('tenants')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'active');
-    setTotalTenants(tenantsCount || 0);
+    setIsLoading(true); // Start loading
+    try {
+      // 1. Fetch Metrics
+      const { count: tenantsCount } = await supabase
+        .from('tenants')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
+      setTotalTenants(tenantsCount || 0);
 
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
-    
-    const { count: newCount } = await supabase
-      .from('tenants')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'active')
-      .gte('created_at', startOfMonth.toISOString());
-    setNewThisMonth(newCount || 0);
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      
+      const { count: newCount } = await supabase
+        .from('tenants')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active')
+        .gte('created_at', startOfMonth.toISOString());
+      setNewThisMonth(newCount || 0);
 
-    // 2. Fetch Available Stalls
-    const { data: stallsData } = await supabase
-      .from('stalls')
-      .select('id, stall_number, section_id, monthly_rent')
-      .eq('status', 'Vacant')
-      .order('stall_number', { ascending: true });
-    
-    if (stallsData) setAvailableStalls(stallsData);
+      // 2. Fetch Available Stalls
+      const { data: stallsData } = await supabase
+        .from('stalls')
+        .select('id, stall_number, section_id, monthly_rent')
+        .eq('status', 'Vacant')
+        .order('stall_number', { ascending: true });
+      
+      if (stallsData) setAvailableStalls(stallsData);
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsLoading(false); // Stop loading
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -166,9 +174,19 @@ export default function RegisterTenant() {
     }
   };
 
+  // --- ADDED LOADING SCREEN ---
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', width: '100%' }}>
+        <div style={{ width: '48px', height: '48px', border: '4px solid #e2e8f0', borderTop: '4px solid #3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <p style={{ marginTop: '20px', color: '#64748b', fontSize: '15px', fontWeight: 500 }}>Loading form data...</p>
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   return (
     <div className="content-wrapper">
-      
       {/* Header */}
       <div className="page-header">
         <div>
@@ -314,7 +332,6 @@ export default function RegisterTenant() {
             <h3 style={{ fontSize: '20px' }}>Success!</h3>
             <p style={{ fontSize: '15px', marginTop: '8px' }}>{successMsg}</p>
             <div className="modal-actions" style={{ marginTop: '24px' }}>
-              {/* Clicking this just closes the modal so you stay on the page */}
               <button className="btn-primary" onClick={() => setSuccessMsg('')} style={{ width: '100%', justifyContent: 'center' }}>
                 Register Another Tenant
               </button>
