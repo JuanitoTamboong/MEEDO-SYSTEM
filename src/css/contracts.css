@@ -1,4 +1,3 @@
-
 .page-header {
     display: flex;
     justify-content: space-between;
@@ -156,20 +155,20 @@
 
 table {
     width: 100%;
-    min-width: 800px; 
+    min-width: 900px; 
     border-collapse: separate;
     border-spacing: 0;
     text-align: center;
     table-layout: fixed;
 }
 
-/* PERFECT COLUMN WIDTHS */
+/* PERFECT COLUMN WIDTHS (Total = 100%) */
 th:nth-child(1) { width: 22%; } /* Tenant */
-th:nth-child(2) { width: 12%; } /* Stall */
-th:nth-child(3) { width: 22%; } /* Contract Period */
-th:nth-child(4) { width: 18%; } /* Financials */
-th:nth-child(5) { width: 12%; } /* Status */
-th:nth-child(6) { width: 160px; } /* INCREASED to 160px to fit buttons perfectly */
+th:nth-child(2) { width: 10%; } /* Stall */
+th:nth-child(3) { width: 20%; } /* Contract Period */
+th:nth-child(4) { width: 16%; } /* Financials */
+th:nth-child(5) { width: 14%; } /* Status */
+th:nth-child(6) { width: 18%; } /* Actions */
 
 th {
     background: #f8fafc; 
@@ -290,31 +289,40 @@ tbody tr:hover td {
 .status-badge.expired { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 .status-badge.terminated { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 
-/* --- Action Buttons (FIXED SPACING) --- */
+/* FIXED: Specific style for No Contract */
+.status-badge.no-contract { 
+    background: #f8fafc; 
+    color: #64748b; 
+    border: 1px solid #cbd5e1; 
+    font-size: 10px; /* Smaller font to fit */
+    padding: 4px 8px;
+}
+
+/* --- Action Buttons --- */
 .action-buttons {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 6px; /* Reduced gap slightly to fit */
-    flex-wrap: nowrap; /* Prevents wrapping */
+    gap: 4px; /* Reduced gap to fit tightly */
+    flex-wrap: nowrap; 
 }
 
 .btn-extend {
     background: #eff6ff;
     color: #2563eb;
     border: 1px solid #bfdbfe;
-    padding: 0 10px; /* Reduced horizontal padding */
+    padding: 0 8px; /* Reduced padding */
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 11px; /* Smaller text */
     font-weight: 600;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 3px;
     transition: all 0.15s;
     white-space: nowrap;
-    height: 34px;
+    height: 32px; /* Slightly shorter */
 }
 
 .btn-extend:hover {
@@ -322,8 +330,8 @@ tbody tr:hover td {
 }
 
 .btn-icon {
-    width: 34px;
-    height: 34px;
+    width: 32px; /* Matches height */
+    height: 32px;
     border: 1px solid #cbd5e1;
     background: white;
     color: #64748b;
@@ -334,6 +342,7 @@ tbody tr:hover td {
     justify-content: center;
     transition: all 0.15s;
     flex-shrink: 0;
+    font-size: 12px;
 }
 
 .btn-icon:hover {

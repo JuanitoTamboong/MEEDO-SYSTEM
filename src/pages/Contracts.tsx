@@ -35,7 +35,6 @@ export default function Contracts() {
   async function fetchContracts() {
     setIsLoading(true);
     try {
-      // 1. Fetch data
       const { data: tenantsData } = await supabase.from('tenants').select('*').eq('status', 'active');
       const { data: stallsData } = await supabase.from('stalls').select('*');
       const { data: paymentsData } = await supabase.from('payments').select('*');
@@ -44,31 +43,39 @@ export default function Contracts() {
       if (tenantsData) {
         const enriched = tenantsData.map(t => {
           const stall = stallsData?.find(s => s.id === t.stall_id);
-          
-          // Check if a formal contract already exists for this tenant
           const existingContract = actualContracts?.find(c => c.tenant_id === t.id);
 
-          // If it exists, use its dates. If not, base it on the tenant's registration date.
-          let startDate = t.created_at.split('T')[0];
-          let endDate = new Date(t.created_at);
-          endDate.setFullYear(endDate.getFullYear() + 1);
-          let endDateStr = endDate.toISOString().split('T')[0];
-          let contractStatus = 'Active';
-          let contractId = existingContract ? existingContract.id : `temp-${t.id}`;
+          let startDate = null;
+          let endDateStr = null;
+          let contractStatus = 'No Contract';
+          let contractId = `temp-${t.id}`;
 
           if (existingContract) {
             startDate = existingContract.start_date;
             endDateStr = existingContract.end_date;
             contractStatus = existingContract.status;
-          } else {
-             // Auto-expire if the 1 year is up
-             if (endDate < new Date()) contractStatus = 'Expired';
+            contractId = existingContract.id;
           }
 
-          // Calculate financials
-          const tenantPayments = paymentsData?.filter(p => p.tenant_id === t.id || p.tenant_name === t.full_name) || [];
-          const paidTotal = tenantPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
-          const remainingTotal = tenantPayments.filter(p => p.status !== 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
+          const stallPayments = paymentsData?.filter(p => p.stall_id === t.stall_id) || [];
+          
+          let validPayments = [];
+          if (startDate && endDateStr) {
+             const startObj = new Date(startDate);
+             const endObj = new Date(endDateStr);
+             endObj.setHours(23, 59, 59, 999);
+             
+             validPayments = stallPayments.filter(p => {
+               if (!p.month_covered) return false;
+               const pDate = new Date(p.month_covered);
+               return pDate >= startObj && pDate <= endObj;
+             });
+          } else {
+             validPayments = stallPayments;
+          }
+
+          const paidTotal = validPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
+          const remainingTotal = validPayments.filter(p => p.status !== 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
 
           return {
             id: contractId,
@@ -86,7 +93,12 @@ export default function Contracts() {
           };
         });
 
-        enriched.sort((a, b) => new Date(a.end_date).getTime() - new Date(b.end_date).getTime());
+        enriched.sort((a, b) => {
+          if (!a.end_date) return 1;
+          if (!b.end_date) return -1;
+          return new Date(a.end_date).getTime() - new Date(b.end_date).getTime();
+        });
+        
         setContracts(enriched);
       }
 
@@ -97,21 +109,25 @@ export default function Contracts() {
     }
   }
 
-  // --- ACTIONS ---
-
   const handleExtendContract = async () => {
     if (!selectedContract) return;
+
+    // Stop if no date is selected
+    if (!newEndDate) {
+      setErrorMsg("Please select a new end date before saving.");
+      return;
+    }
+
     setIsActionLoading(true);
     
     try {
       let targetContractId = selectedContract.id;
 
-      // If the contract was temporary (auto-generated from tenant), create the formal record now
       if (selectedContract.id.toString().startsWith('temp-')) {
         const { data: newContract, error: createError } = await supabase.from('contracts').insert([{
           tenant_id: selectedContract.tenant_id,
           stall_id: selectedContract.stall_id,
-          start_date: selectedContract.start_date,
+          start_date: selectedContract.start_date || new Date().toISOString().split('T')[0],
           end_date: newEndDate,
           status: 'Active'
         }]).select().single();
@@ -119,10 +135,7 @@ export default function Contracts() {
         if (createError) throw createError;
         targetContractId = newContract.id;
       } else {
-        // Update existing contract
         await supabase.from('contracts').update({ end_date: newEndDate, status: 'Active' }).eq('id', targetContractId);
-
-        // Log the extension
         await supabase.from('contract_extensions').insert([{
           contract_id: targetContractId,
           previous_end_date: selectedContract.end_date,
@@ -131,21 +144,30 @@ export default function Contracts() {
         }]);
       }
 
-      // Generate pending payments for the extension
-      const endDate = new Date(newEndDate);
-      const current = new Date(selectedContract.end_date);
-      
+      // Generate PENDING payments for the extension period
+      const current = new Date(selectedContract.end_date || new Date());
+      const end = new Date(newEndDate);
       const newPayments = [];
-      while (current < endDate) {
-        const monthCovered = current.toISOString().slice(0, 7) + '-01';
+
+      while (current < end) {
+        const year = current.getFullYear();
+        const month = String(current.getMonth() + 1).padStart(2, '0');
+        const day = String(current.getDate()).padStart(2, '0');
+        const monthCovered = `${year}-${month}-${day}`;
+        
+        const nextDue = new Date(current);
+        nextDue.setMonth(nextDue.getMonth() + 1);
+        const dueDateStr = nextDue.toISOString().split('T')[0];
+
         newPayments.push({
           stall_id: selectedContract.stall_id,
           tenant_name: selectedContract.full_name,
           amount: selectedContract.monthly_rent,
-          due_date: monthCovered,
+          due_date: dueDateStr,
           month_covered: monthCovered,
-          status: 'Pending'
+          status: 'Pending' // Always created as Pending initially
         });
+        
         current.setMonth(current.getMonth() + 1);
       }
 
@@ -153,12 +175,15 @@ export default function Contracts() {
         await supabase.from('payments').upsert(newPayments, { onConflict: 'stall_id,month_covered' });
       }
 
+      // ONLY if the checkbox is ticked, update the status to Paid
       if (payAll) {
-        const startMonth = selectedContract.start_date.slice(0, 7) + '-01';
+        const startMonth = (selectedContract.start_date || new Date().toISOString().split('T')[0]).slice(0, 7) + '-01';
         const endMonth = newEndDate.slice(0, 7) + '-01';
-        await supabase.from('payments').update({ status: 'Paid', payment_date: new Date().toISOString().split('T')[0], penalty: 0 })
+        
+        await supabase.from('payments')
+          .update({ status: 'Paid', payment_date: new Date().toISOString().split('T')[0], penalty: 0 })
           .eq('stall_id', selectedContract.stall_id)
-          .neq('status', 'Paid')
+          .neq('status', 'Paid') // Only update ones that aren't already paid
           .gte('month_covered', startMonth)
           .lt('month_covered', endMonth);
       }
@@ -167,6 +192,7 @@ export default function Contracts() {
 
       setExtendModalOpen(false);
       setSuccessMsg(`Contract extended to ${newEndDate}.`);
+      setPayAll(false); // Reset the checkbox for next time
       fetchContracts();
       
     } catch (err: any) {
@@ -189,7 +215,6 @@ export default function Contracts() {
       let targetContractId = selectedContract.id;
 
       if (selectedContract.id.toString().startsWith('temp-')) {
-        // Create formal contract if it doesn't exist
         const { data: newContract, error: createError } = await supabase.from('contracts').insert([{
           tenant_id: selectedContract.tenant_id,
           stall_id: selectedContract.stall_id,
@@ -222,48 +247,50 @@ export default function Contracts() {
     }
   };
 
+  // --- FIXED: UNDO EXTENSION (Now deletes completely if no prior extension exists) ---
   const handleUndoExtension = async () => {
     if (!selectedContract) return;
-    if (selectedContract.id.toString().startsWith('temp-')) {
-      setErrorMsg("No extension to undo for this auto-generated contract.");
-      setUndoModalOpen(false);
-      return;
-    }
 
     setIsActionLoading(true);
     
     try {
-      const { data: extensions } = await supabase
-        .from('contract_extensions')
-        .select('*')
-        .eq('contract_id', selectedContract.id)
-        .order('id', { ascending: false })
-        .limit(1);
-
-      if (!extensions || extensions.length === 0) {
-        throw new Error("No contract extension is available to undo.");
-      }
-
-      const lastExt = extensions[0];
-      const restoreMonth = lastExt.previous_end_date.slice(0, 7) + '-01';
+      // 1. Delete all unpaid payments generated by this contract/extension
+      const restoreMonth = selectedContract.start_date ? selectedContract.start_date.slice(0, 7) + '-01' : new Date().toISOString().slice(0, 7) + '-01';
       const currentMonth = selectedContract.end_date.slice(0, 7) + '-01';
       
       await supabase.from('payments').delete()
         .eq('stall_id', selectedContract.stall_id)
+        .neq('status', 'Paid')
         .gte('month_covered', restoreMonth)
         .lt('month_covered', currentMonth);
 
-      await supabase.from('contract_extensions').delete().eq('id', lastExt.id);
+      // 2. If it's a real contract ID, check for extensions
+      if (!selectedContract.id.toString().startsWith('temp-')) {
+        const { data: extensions } = await supabase
+          .from('contract_extensions')
+          .select('*')
+          .eq('contract_id', selectedContract.id)
+          .order('id', { ascending: false })
+          .limit(1);
 
-      await supabase.from('contracts').update({ 
-        end_date: lastExt.previous_end_date, 
-        status: lastExt.previous_end_date < new Date().toISOString().split('T')[0] ? 'Expired' : 'Active' 
-      }).eq('id', selectedContract.id);
+        if (extensions && extensions.length > 0) {
+          // If there was a previous extension, revert to the old end date
+          const lastExt = extensions[0];
+          await supabase.from('contract_extensions').delete().eq('id', lastExt.id);
+          await supabase.from('contracts').update({ 
+            end_date: lastExt.previous_end_date, 
+            status: lastExt.previous_end_date < new Date().toISOString().split('T')[0] ? 'Expired' : 'Active' 
+          }).eq('id', selectedContract.id);
+        } else {
+          // If there are NO extensions, it means this was the first contract. Delete it completely.
+          await supabase.from('contracts').delete().eq('id', selectedContract.id);
+        }
+      }
 
-      await recordAuditLog('Undo Extension', `Undid the most recent extension for contract #${selectedContract.id}.`, 'Contract', selectedContract.id);
+      await recordAuditLog('Undo Extension', `Undid the most recent extension/contract for ${selectedContract.full_name}.`, 'Contract', typeof selectedContract.id === 'number' ? selectedContract.id : undefined);
 
       setUndoModalOpen(false);
-      setSuccessMsg('The extension was successfully undone.');
+      setSuccessMsg('The contract/extension was successfully undone.');
       fetchContracts();
       
     } catch (err: any) {
@@ -273,7 +300,6 @@ export default function Contracts() {
     }
   };
 
-  // --- FILTERS ---
   const filteredContracts = contracts.filter(c => {
     const search = searchQuery.toLowerCase();
     const matchesSearch = c.full_name.toLowerCase().includes(search) || 
@@ -299,7 +325,6 @@ export default function Contracts() {
 
   return (
     <div className="content-wrapper">
-      {/* Header */}
       <div className="page-header">
         <div>
           <h1>Contracts</h1>
@@ -310,39 +335,25 @@ export default function Contracts() {
         </div>
       </div>
 
-      {/* Metrics */}
       <div className="metric-row">
         <div className="metric-box">
           <div className="metric-icon blue"><i className="fa-solid fa-file-signature"></i></div>
-          <div className="metric-data">
-            <div className="metric-label">Total Contracts</div>
-            <div className="metric-value">{contracts.length}</div>
-          </div>
+          <div className="metric-data"><div className="metric-label">Total Contracts</div><div className="metric-value">{contracts.length}</div></div>
         </div>
         <div className="metric-box">
           <div className="metric-icon green"><i className="fa-solid fa-circle-check"></i></div>
-          <div className="metric-data">
-            <div className="metric-label">Active</div>
-            <div className="metric-value">{activeCount}</div>
-          </div>
+          <div className="metric-data"><div className="metric-label">Active</div><div className="metric-value">{activeCount}</div></div>
         </div>
         <div className="metric-box">
           <div className="metric-icon red"><i className="fa-solid fa-clock-rotate-left"></i></div>
-          <div className="metric-data">
-            <div className="metric-label">Expired</div>
-            <div className="metric-value">{expiredCount}</div>
-          </div>
+          <div className="metric-data"><div className="metric-label">Expired</div><div className="metric-value">{expiredCount}</div></div>
         </div>
         <div className="metric-box">
           <div className="metric-icon orange"><i className="fa-solid fa-coins"></i></div>
-          <div className="metric-data">
-            <div className="metric-label">Outstanding</div>
-            <div className="metric-value">₱{totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-          </div>
+          <div className="metric-data"><div className="metric-label">Outstanding</div><div className="metric-value">₱{totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div></div>
         </div>
       </div>
 
-      {/* Table */}
       <div className="data-panel">
         <div className="data-header">
           <h2>Contract Directory</h2>
@@ -355,6 +366,7 @@ export default function Contracts() {
               <option value="all">All statuses</option>
               <option value="active">Active</option>
               <option value="expired">Expired</option>
+              <option value="no contract">No Contract</option>
               <option value="terminated">Terminated</option>
             </select>
           </div>
@@ -385,9 +397,15 @@ export default function Contracts() {
                     <td><span className="stall-badge">{c.stall_number}</span></td>
                     <td>
                       <div className="date-range">
-                        {new Date(c.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} 
-                        <i className="fa-solid fa-arrow-right"></i> 
-                        {new Date(c.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {c.start_date && c.end_date ? (
+                          <>
+                            {new Date(c.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} 
+                            <i className="fa-solid fa-arrow-right"></i> 
+                            {new Date(c.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No formal contract</span>
+                        )}
                       </div>
                     </td>
                     <td>
@@ -397,16 +415,20 @@ export default function Contracts() {
                         <div className="fin-row"><span className="fin-label">Balance</span><span className="fin-value text-red">₱{Number(c.remaining_total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                       </div>
                     </td>
-                    <td><span className={`status-badge ${c.status.toLowerCase()}`}>{c.status}</span></td>
+                    <td>
+                      <span className={`status-badge ${c.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                        {c.status}
+                      </span>
+                    </td>
                     <td>
                       {c.status === 'Terminated' ? (
                         <span className="text-muted">View Only</span>
                       ) : (
                         <div className="action-buttons">
-                          <button className="btn-extend" onClick={() => { setSelectedContract(c); setNewEndDate(c.end_date); setExtendModalOpen(true); }}>
+                          <button className="btn-extend" onClick={() => { setSelectedContract(c); setNewEndDate(c.end_date || ''); setExtendModalOpen(true); }}>
                             <i className="fa-solid fa-calendar-plus"></i> Extend
                           </button>
-                          <button className="btn-icon" onClick={() => { setSelectedContract(c); setEditStartDate(c.start_date); setEditEndDate(c.end_date); setEditDateModalOpen(true); }}>
+                          <button className="btn-icon" onClick={() => { setSelectedContract(c); setEditStartDate(c.start_date || ''); setEditEndDate(c.end_date || ''); setEditDateModalOpen(true); }}>
                             <i className="fa-solid fa-pen"></i>
                           </button>
                           <button className="btn-icon danger" onClick={() => { setSelectedContract(c); setUndoModalOpen(true); }}>
@@ -433,7 +455,7 @@ export default function Contracts() {
             <div className="modal-details">
               <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
               <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
-              <div><strong>Current End Date:</strong> {new Date(selectedContract.end_date).toLocaleDateString()}</div>
+              <div><strong>Current End Date:</strong> {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString() : 'No contract yet'}</div>
             </div>
             <div className="input-group" style={{ marginBottom: '16px' }}>
               <label>New End Date</label>
@@ -492,7 +514,7 @@ export default function Contracts() {
           <div className="modal-box" style={{ maxWidth: '440px' }}>
             <div className="modal-icon danger-icon"><i className="fa-solid fa-rotate-left"></i></div>
             <h3>Undo last extension?</h3>
-            <p>This will remove the most recent extension and delete any unpaid OR paid records created by it.</p>
+            <p>This will remove the most recent extension and delete any unpaid records created by it. If this was the first contract, it will be deleted completely.</p>
             <div className="modal-details">
               <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
               <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
