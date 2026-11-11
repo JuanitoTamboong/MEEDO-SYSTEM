@@ -15,7 +15,7 @@ import EditTenant from './pages/EditTenant';
 import FinancialReports from './pages/FinancialReports';
 import Contracts from './pages/Contracts';
 import ActivityLogs from './pages/ActivityLogs';
-import Receipt from './pages/Receipt'; // Correct default import
+import Receipt from './pages/Receipt'; 
 import Layout from './components/Layout';
 
 class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -79,6 +79,9 @@ function App() {
         <Routes>
           <Route path="/" element={<Login />} />
           
+          {/* MOVED OUTSIDE THE LAYOUT: So it has no sidebar or header */}
+          <Route path="/receipt" element={<Receipt />} />
+
           <Route element={<Layout />}>
             {/* Accessible by Everyone */}
             <Route path="/dashboard" element={<Dashboard />} />
@@ -86,7 +89,6 @@ function App() {
             <Route path="/stall-details" element={<StallDetails />} /> 
             <Route path="/financial-reports" element={<FinancialReports />} /> 
             <Route path="/logs" element={<ActivityLogs />} /> 
-            <Route path="/receipt" element={<Receipt />} /> 
             
             {/* Treasury CAN Access these */}
             <Route path="/pay-rent" element={<PayRent />} /> 
