@@ -15,6 +15,7 @@ import EditTenant from './pages/EditTenant';
 import FinancialReports from './pages/FinancialReports';
 import Contracts from './pages/Contracts';
 import ActivityLogs from './pages/ActivityLogs';
+import Receipt from './pages/Receipt'; // Correct default import
 import Layout from './components/Layout';
 
 class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -41,7 +42,6 @@ class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean,
   }
 }
 
-// Role Protection Component
 function RoleProtectedRoute({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) {
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,6 @@ function RoleProtectedRoute({ children, allowedRoles }: { children: React.ReactN
     checkRole();
   }, []);
 
-  // --- UPDATED LOADING SCREEN (Replaces the plain text) ---
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', width: '100%' }}>
@@ -81,12 +80,13 @@ function App() {
           <Route path="/" element={<Login />} />
           
           <Route element={<Layout />}>
-            {/* Accessible by Everyone (Including Treasury) */}
+            {/* Accessible by Everyone */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/stall-monitoring" element={<StallMonitoring />} /> 
             <Route path="/stall-details" element={<StallDetails />} /> 
             <Route path="/financial-reports" element={<FinancialReports />} /> 
             <Route path="/logs" element={<ActivityLogs />} /> 
+            <Route path="/receipt" element={<Receipt />} /> 
             
             {/* Treasury CAN Access these */}
             <Route path="/pay-rent" element={<PayRent />} /> 

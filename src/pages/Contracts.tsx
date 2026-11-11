@@ -35,34 +35,52 @@ export default function Contracts() {
   async function fetchContracts() {
     setIsLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      await supabase.from('contracts').update({ status: 'Expired' }).lt('end_date', today).eq('status', 'Active');
-
-      const { data: contractsData } = await supabase.from('contracts').select('*');
-      const { data: tenantsData } = await supabase.from('tenants').select('*');
+      // 1. Fetch data
+      const { data: tenantsData } = await supabase.from('tenants').select('*').eq('status', 'active');
       const { data: stallsData } = await supabase.from('stalls').select('*');
       const { data: paymentsData } = await supabase.from('payments').select('*');
+      const { data: actualContracts } = await supabase.from('contracts').select('*');
 
-      if (contractsData) {
-        const enriched = contractsData.map(c => {
-          const tenant = tenantsData?.find(t => t.id === c.tenant_id);
-          const stall = stallsData?.find(s => s.id === c.stall_id);
+      if (tenantsData) {
+        const enriched = tenantsData.map(t => {
+          const stall = stallsData?.find(s => s.id === t.stall_id);
           
-          const contractPayments = paymentsData?.filter(p => 
-            p.stall_id === c.stall_id && 
-            p.month_covered >= c.start_date.slice(0, 7) + '-01' && 
-            p.month_covered < c.end_date.slice(0, 7) + '-01'
-          ) || [];
+          // Check if a formal contract already exists for this tenant
+          const existingContract = actualContracts?.find(c => c.tenant_id === t.id);
 
-          const paidTotal = contractPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
-          const remainingTotal = contractPayments.filter(p => p.status !== 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
+          // If it exists, use its dates. If not, base it on the tenant's registration date.
+          let startDate = t.created_at.split('T')[0];
+          let endDate = new Date(t.created_at);
+          endDate.setFullYear(endDate.getFullYear() + 1);
+          let endDateStr = endDate.toISOString().split('T')[0];
+          let contractStatus = 'Active';
+          let contractId = existingContract ? existingContract.id : `temp-${t.id}`;
+
+          if (existingContract) {
+            startDate = existingContract.start_date;
+            endDateStr = existingContract.end_date;
+            contractStatus = existingContract.status;
+          } else {
+             // Auto-expire if the 1 year is up
+             if (endDate < new Date()) contractStatus = 'Expired';
+          }
+
+          // Calculate financials
+          const tenantPayments = paymentsData?.filter(p => p.tenant_id === t.id || p.tenant_name === t.full_name) || [];
+          const paidTotal = tenantPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
+          const remainingTotal = tenantPayments.filter(p => p.status !== 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
 
           return {
-            ...c,
-            full_name: tenant?.full_name || 'Unknown',
-            business_name: tenant?.business_name || '—',
+            id: contractId,
+            tenant_id: t.id,
+            full_name: t.full_name,
+            business_name: t.business_name,
+            stall_id: t.stall_id,
             stall_number: stall?.stall_number || '—',
             monthly_rent: stall?.monthly_rent || 0,
+            start_date: startDate,
+            end_date: endDateStr,
+            status: contractStatus,
             paid_total: paidTotal,
             remaining_total: remainingTotal
           };
@@ -86,15 +104,34 @@ export default function Contracts() {
     setIsActionLoading(true);
     
     try {
-      await supabase.from('contracts').update({ end_date: newEndDate, status: 'Active' }).eq('id', selectedContract.id);
+      let targetContractId = selectedContract.id;
 
-      await supabase.from('contract_extensions').insert([{
-        contract_id: selectedContract.id,
-        previous_end_date: selectedContract.end_date,
-        new_end_date: newEndDate,
-        months: 0
-      }]);
+      // If the contract was temporary (auto-generated from tenant), create the formal record now
+      if (selectedContract.id.toString().startsWith('temp-')) {
+        const { data: newContract, error: createError } = await supabase.from('contracts').insert([{
+          tenant_id: selectedContract.tenant_id,
+          stall_id: selectedContract.stall_id,
+          start_date: selectedContract.start_date,
+          end_date: newEndDate,
+          status: 'Active'
+        }]).select().single();
 
+        if (createError) throw createError;
+        targetContractId = newContract.id;
+      } else {
+        // Update existing contract
+        await supabase.from('contracts').update({ end_date: newEndDate, status: 'Active' }).eq('id', targetContractId);
+
+        // Log the extension
+        await supabase.from('contract_extensions').insert([{
+          contract_id: targetContractId,
+          previous_end_date: selectedContract.end_date,
+          new_end_date: newEndDate,
+          months: 0
+        }]);
+      }
+
+      // Generate pending payments for the extension
       const endDate = new Date(newEndDate);
       const current = new Date(selectedContract.end_date);
       
@@ -126,7 +163,7 @@ export default function Contracts() {
           .lt('month_covered', endMonth);
       }
 
-      await recordAuditLog('Extend Contract', `Extended the contract for ${selectedContract.full_name} to ${newEndDate}.`, 'Contract', selectedContract.id);
+      await recordAuditLog('Extend Contract', `Extended the contract for ${selectedContract.full_name} to ${newEndDate}.`, 'Contract', typeof targetContractId === 'number' ? targetContractId : undefined);
 
       setExtendModalOpen(false);
       setSuccessMsg(`Contract extended to ${newEndDate}.`);
@@ -149,7 +186,23 @@ export default function Contracts() {
       
       if (end <= start) throw new Error("The end date must be after the start date.");
 
-      await supabase.from('contracts').update({ start_date: editStartDate, end_date: editEndDate, status: end < new Date() ? 'Expired' : 'Active' }).eq('id', selectedContract.id);
+      let targetContractId = selectedContract.id;
+
+      if (selectedContract.id.toString().startsWith('temp-')) {
+        // Create formal contract if it doesn't exist
+        const { data: newContract, error: createError } = await supabase.from('contracts').insert([{
+          tenant_id: selectedContract.tenant_id,
+          stall_id: selectedContract.stall_id,
+          start_date: editStartDate,
+          end_date: editEndDate,
+          status: end < new Date() ? 'Expired' : 'Active'
+        }]).select().single();
+        
+        if (createError) throw createError;
+        targetContractId = newContract.id;
+      } else {
+        await supabase.from('contracts').update({ start_date: editStartDate, end_date: editEndDate, status: end < new Date() ? 'Expired' : 'Active' }).eq('id', targetContractId);
+      }
 
       const endMonth = editEndDate.slice(0, 7) + '-01';
       await supabase.from('payments').delete()
@@ -157,7 +210,7 @@ export default function Contracts() {
         .neq('status', 'Paid')
         .gt('month_covered', endMonth);
 
-      await recordAuditLog('Edit Contract', `Changed the contract dates for contract #${selectedContract.id} to ${editStartDate} - ${editEndDate}.`, 'Contract', selectedContract.id);
+      await recordAuditLog('Edit Contract', `Changed the contract dates for ${selectedContract.full_name} to ${editStartDate} - ${editEndDate}.`, 'Contract', typeof targetContractId === 'number' ? targetContractId : undefined);
 
       setEditDateModalOpen(false);
       setSuccessMsg('Contract dates updated.');
@@ -169,13 +222,17 @@ export default function Contracts() {
     }
   };
 
-  // OPTIMIZED UNDO
   const handleUndoExtension = async () => {
     if (!selectedContract) return;
+    if (selectedContract.id.toString().startsWith('temp-')) {
+      setErrorMsg("No extension to undo for this auto-generated contract.");
+      setUndoModalOpen(false);
+      return;
+    }
+
     setIsActionLoading(true);
     
     try {
-      // 1. Get the last extension record
       const { data: extensions } = await supabase
         .from('contract_extensions')
         .select('*')
@@ -191,25 +248,20 @@ export default function Contracts() {
       const restoreMonth = lastExt.previous_end_date.slice(0, 7) + '-01';
       const currentMonth = selectedContract.end_date.slice(0, 7) + '-01';
       
-      // 2. Bulk delete payments created during the extension
       await supabase.from('payments').delete()
         .eq('stall_id', selectedContract.stall_id)
         .gte('month_covered', restoreMonth)
         .lt('month_covered', currentMonth);
 
-      // 3. Delete the extension record
       await supabase.from('contract_extensions').delete().eq('id', lastExt.id);
 
-      // 4. Restore the contract end date
       await supabase.from('contracts').update({ 
         end_date: lastExt.previous_end_date, 
         status: lastExt.previous_end_date < new Date().toISOString().split('T')[0] ? 'Expired' : 'Active' 
       }).eq('id', selectedContract.id);
 
-      // 5. Log it
       await recordAuditLog('Undo Extension', `Undid the most recent extension for contract #${selectedContract.id}.`, 'Contract', selectedContract.id);
 
-      // 6. Close modal and show success
       setUndoModalOpen(false);
       setSuccessMsg('The extension was successfully undone.');
       fetchContracts();

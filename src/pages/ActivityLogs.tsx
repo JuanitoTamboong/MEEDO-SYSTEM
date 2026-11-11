@@ -158,36 +158,47 @@ export default function ActivityLogs() {
                 </tr>
               </thead>
               <tbody>
-                {filteredLogs.map(log => (
-                  <tr key={log.id}>
-                    <td>
-                      <div className="timestamp">{new Date(log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                      <div className="timestamp-sub">{new Date(log.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
-                    </td>
-                    <td>
-                      <div className="user-name">{log.username}</div>
-                      <div className={`role-badge ${log.role?.toLowerCase().replace(/\s+/g, '.')}`}>{log.role}</div>
-                    </td>
-                    <td>
-                      <span className="action-badge">{log.action}</span>
-                    </td>
-                    <td>
-                      <div className="log-description">{log.description}</div>
-                      {log.entity_type && log.entity_id && (
-                        <div className="log-entity">{log.entity_type} #{log.entity_id}</div>
-                      )}
-                    </td>
-                    <td>
-                      <button
-                        className="btn-icon danger"
-                        title="Delete this log"
-                        onClick={() => { setSelectedLog(log); setDeleteModalOpen(true); }}
-                      >
-                        <i className="fa-solid fa-trash"></i>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {filteredLogs.map(log => {
+                  // --- FIXED: Force Asia/Manila timezone ---
+                  const logDate = new Date(log.created_at);
+                  const dateStr = logDate.toLocaleDateString('en-US', { 
+                    month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' 
+                  });
+                  const timeStr = logDate.toLocaleTimeString('en-US', { 
+                    hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Manila' 
+                  });
+
+                  return (
+                    <tr key={log.id}>
+                      <td>
+                        <div className="timestamp">{dateStr}</div>
+                        <div className="timestamp-sub">{timeStr}</div>
+                      </td>
+                      <td>
+                        <div className="user-name">{log.username}</div>
+                        <div className={`role-badge ${log.role?.toLowerCase().replace(/\s+/g, '.')}`}>{log.role}</div>
+                      </td>
+                      <td>
+                        <span className="action-badge">{log.action}</span>
+                      </td>
+                      <td>
+                        <div className="log-description">{log.description}</div>
+                        {log.entity_type && log.entity_id && (
+                          <div className="log-entity">{log.entity_type} #{log.entity_id}</div>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          className="btn-icon danger"
+                          title="Delete this log"
+                          onClick={() => { setSelectedLog(log); setDeleteModalOpen(true); }}
+                        >
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -59,11 +59,11 @@ export default function StallMonitoring() {
       const { data: tenantsData } = await supabase.from('tenants').select('*').eq('status', 'active');
       const { data: sectionsData } = await supabase.from('sections').select('*');
       
-      // FETCH ALL PAYMENTS (Removed the hardcoded 1st-of-the-month filter)
+      // FETCH ALL PAYMENTS
       const { data: paymentsData } = await supabase
         .from('payments')
         .select('*')
-        .order('due_date', { ascending: false }); // Get newest first
+        .order('due_date', { ascending: false }); 
 
       const { data: overdueData } = await supabase
         .from('payments')
@@ -76,15 +76,21 @@ export default function StallMonitoring() {
         const mappedStalls: Stall[] = stallsData.map((s) => {
           const activeTenant = tenantsData?.find((t) => t.stall_id === s.id);
           
-          // FIND LATEST PAYMENT FOR THIS STALL
+          // FIND ALL PAYMENTS FOR THIS STALL
           const stallPayments = paymentsData?.filter((p) => p.stall_id === s.id) || [];
-          const latestPayment = stallPayments.length > 0 ? stallPayments[0] : null;
+          
+          // FIXED: Find the latest PAID record. If none, find the oldest PENDING one.
+          const latestPaid = stallPayments.find(p => p.status === 'Paid');
+          const latestPending = stallPayments.find(p => p.status === 'Pending' || p.status === 'Overdue');
+          
+          // We use the latestPaid to show the status, but if they haven't paid, we show the pending one.
+          const currentRecord = latestPaid || latestPending;
 
           const section = sectionsData?.find((sec) => sec.id === s.section_id);
           
           let pStatus = 'Available';
           if (s.status === 'Occupied' && activeTenant) {
-            pStatus = latestPayment ? latestPayment.status : 'Pending';
+            pStatus = currentRecord ? currentRecord.status : 'Pending';
           }
 
           return {
@@ -96,7 +102,8 @@ export default function StallMonitoring() {
             contact_number: activeTenant?.contact_number || null,
             section_name: section?.section_name || null,
             payment_status: pStatus,
-            due_date: latestPayment?.due_date || null
+            // If they are Paid, show the next due date (from the pending record). If not, show the due date of the pending record.
+            due_date: latestPending?.due_date || currentRecord?.due_date || null
           };
         });
 

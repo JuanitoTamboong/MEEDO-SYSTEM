@@ -43,21 +43,53 @@ export default function PayRent() {
       const name = tenantData?.full_name || stallData.tenant_name || 'Tenant';
       setTenantName(name);
 
+      // --- 🛑 STRICT MONTH CHECK 🛑 ---
+      const today = new Date();
+      const currentMonth = today.getMonth(); 
+      const currentYear = today.getFullYear();
+
+      // Fetch ALL payments for this stall to manually check dates
+      const { data: allPayments } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('stall_id', stallId)
+        .eq('status', 'Paid');
+
+      if (allPayments) {
+        const alreadyPaidThisMonth = allPayments.some(p => {
+          if (!p.month_covered) return false;
+          const coveredDate = new Date(p.month_covered);
+          return coveredDate.getMonth() === currentMonth && coveredDate.getFullYear() === currentYear;
+        });
+
+        if (alreadyPaidThisMonth) {
+          throw new Error(`Rent for ${today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} has already been paid. You cannot record another payment for this month.`);
+        }
+      }
+      // --------------------------------
+
+      // Check for existing unpaid bill
       const { data: unpaidPayments } = await supabase
         .from('payments').select('*').eq('stall_id', stallId).neq('status', 'Paid').order('due_date', { ascending: true }).limit(1);
 
       if (unpaidPayments && unpaidPayments.length > 0) {
         setPayment(unpaidPayments[0]);
       } else {
-        const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
+        // Generate first bill if no records exist
+        const nextMonthDate = new Date(today);
+        nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+        
+        const nextMonthStr = nextMonthDate.toISOString().split('T')[0]; 
+        const todayStr = today.toISOString().split('T')[0];
+
         const { data: newPayment, error: createError } = await supabase
           .from('payments')
           .upsert([{
             stall_id: Number(stallId),
             tenant_name: name,
             amount: stallData.monthly_rent,
-            due_date: currentMonth,
-            month_covered: currentMonth,
+            due_date: nextMonthStr,       
+            month_covered: todayStr,      
             status: 'Pending'
           }], { onConflict: 'stall_id,month_covered' })
           .select().single();
@@ -74,27 +106,36 @@ export default function PayRent() {
 
   const handleConfirmPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (isSubmitting) return;
     
     setIsSubmitting(true);
     setErrorMsg('');
 
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+
+      const receiptNumber = `PAY-${todayStr.replace(/-/g, '')}-${payment.id}`;
 
       // 1. Mark payment as PAID
       const { error: updateError } = await supabase
         .from('payments')
-        .update({ status: 'Paid', payment_date: today, penalty: 0 })
+        .update({ 
+          status: 'Paid', 
+          payment_date: todayStr, 
+          penalty: 0,
+          receipt_number: receiptNumber
+        })
         .eq('id', payment.id);
 
       if (updateError) throw updateError;
 
       // 2. Generate NEXT month payment
-      const nextMonthDate = new Date(payment.month_covered);
+      const currentDueDate = new Date(payment.due_date);
+      const nextMonthDate = new Date(currentDueDate);
       nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
-      const nextMonthStr = nextMonthDate.toISOString().slice(0, 7) + '-01';
+      
+      const nextMonthStr = nextMonthDate.toISOString().split('T')[0]; 
 
       const { error: upsertError } = await supabase
         .from('payments')
@@ -103,7 +144,7 @@ export default function PayRent() {
           tenant_name: tenantName,
           amount: payment.amount,
           due_date: nextMonthStr,
-          month_covered: nextMonthStr,
+          month_covered: payment.due_date, 
           status: 'Pending'
         }], { onConflict: 'stall_id,month_covered' });
 
@@ -117,10 +158,8 @@ export default function PayRent() {
         payment.id
       );
 
-      // 4. Show Success Popup
       setIsSuccess(true);
 
-      // 5. Redirect after 1.5 seconds
       setTimeout(() => {
         navigate(`/stall-details?stall=${stall.stall_number}&payment=success`);
       }, 1500);
@@ -172,7 +211,7 @@ export default function PayRent() {
             </div>
           )}
 
-          {payment ? (
+          {!errorMsg && payment ? (
             <>
               <div className="payment-summary">
                 <div className="summary-row">
@@ -213,16 +252,15 @@ export default function PayRent() {
               </form>
             </>
           ) : (
-            <div className="alert alert-error" style={{ marginBottom: 0 }}>
-              <i className="fa-solid fa-circle-exclamation"></i> There is no unpaid rent to record for this stall.
-            </div>
+            !payment && !errorMsg && (
+              <div className="alert alert-error" style={{ marginBottom: 0 }}>
+                <i className="fa-solid fa-circle-exclamation"></i> There is no unpaid rent to record for this stall.
+              </div>
+            )
           )}
         </div>
       </div>
 
-      {/* ==========================================
-          PROCESSING / SUCCESS POPUP MODAL
-          ========================================== */}
       {(isSubmitting || isSuccess) && (
         <div className="modal-backdrop active">
           <div className="modal-box" style={{ textAlign: 'center', maxWidth: '400px' }}>

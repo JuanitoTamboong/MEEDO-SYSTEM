@@ -20,6 +20,7 @@ export default function StallDetails() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // --- MODAL STATES ---
   const [vacateModalOpen, setVacateModalOpen] = useState(false);
   const [deletePaymentModalOpen, setDeletePaymentModalOpen] = useState(false);
   const [selectedPaymentToDelete, setSelectedPaymentToDelete] = useState<any>(null);
@@ -27,6 +28,7 @@ export default function StallDetails() {
 
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [isVacateSuccess, setIsVacateSuccess] = useState(false); // Tracks if the popup is for vacating
 
   const [showPermissionPopup, setShowPermissionPopup] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState('');
@@ -69,15 +71,31 @@ export default function StallDetails() {
         if (tenantData) setTenant(tenantData);
       }
 
-      // Fetch Payment History (sorted by due_date descending)
-      const { data: historyData } = await supabase.from('payments').select('*').eq('stall_id', stallData.id).order('due_date', { ascending: false }).limit(10);
+      // Fetch ALL history, newest first based on due date
+      const { data: historyData } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('stall_id', stallData.id)
+        .order('due_date', { ascending: false })
+        .limit(20);
       
-      if (historyData) {
-        setPaymentHistory(historyData);
-        // The most recent payment is the first one in the descending list
-        if (historyData.length > 0) {
-          setCurrentPayment(historyData[0]);
+      if (historyData && historyData.length > 0) {
+        
+        const latestPaid = historyData.find((p: any) => p.status === 'Paid');
+        const nextPending = historyData.find((p: any) => p.status === 'Pending' || p.status === 'Overdue');
+
+        if (latestPaid) {
+          setCurrentPayment(latestPaid);
+        } else if (nextPending) {
+          setCurrentPayment(nextPending);
         }
+
+        const paidOnly = historyData.filter((p: any) => p.status === 'Paid');
+        setPaymentHistory(paidOnly);
+
+      } else {
+        setPaymentHistory([]);
+        setCurrentPayment(null);
       }
 
     } catch (error: any) {
@@ -97,13 +115,37 @@ export default function StallDetails() {
       return;
     }
 
+    setIsDeleting(true); // Show loading on the button
+
     try {
-      await supabase.from('tenants').update({ status: 'inactive' }).eq('id', tenant.id);
-      await supabase.from('stalls').update({ status: 'Vacant', tenant_name: null }).eq('id', stall.id);
-      await recordAuditLog('Vacate Stall', `Vacated stall '${stall.stall_number}' (Tenant: ${tenant.full_name}).`, 'Stall', stall.id);
-      navigate('/stall-monitoring');
+      // 1. Delete all payments for this stall
+      await supabase.from('payments').delete().eq('stall_id', stall.id);
+
+      // 2. Delete any contracts linked to this tenant
+      await supabase.from('contracts').delete().eq('tenant_id', tenant.id);
+
+      // 3. Delete the tenant completely from the database
+      await supabase.from('tenants').delete().eq('id', tenant.id);
+      
+      // 4. Mark the stall as Vacant
+      await supabase.from('stalls').update({ 
+        status: 'Vacant', 
+        tenant_name: null 
+      }).eq('id', stall.id);
+
+      // 5. Log the wipe action
+      await recordAuditLog('Vacate & Delete', `Deleted tenant '${tenant.full_name}' and all their records from stall '${stall.stall_number}'.`, 'Stall', stall.id);
+      
+      // 6. Show Success Popup
+      setVacateModalOpen(false);
+      setIsVacateSuccess(true);
+      setSuccessMessage(`Tenant '${tenant.full_name}' and all their records have been successfully deleted.`);
+      setShowSuccessPopup(true);
+
     } catch (error: any) {
-      alert("Error vacating stall: " + error.message);
+      alert("Error vacating and deleting: " + error.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -122,6 +164,7 @@ export default function StallDetails() {
       );
 
       setSuccessMessage(`Payment for ${new Date(selectedPaymentToDelete.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} has been deleted.`);
+      setIsVacateSuccess(false); // Not a vacate action
       setShowSuccessPopup(true);
       
       setDeletePaymentModalOpen(false);
@@ -129,14 +172,17 @@ export default function StallDetails() {
       
       fetchData();
 
-      setTimeout(() => {
-        setShowSuccessPopup(false);
-      }, 3000);
-
     } catch (err: any) {
       alert("Error deleting payment: " + err.message);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleCloseSuccessPopup = () => {
+    setShowSuccessPopup(false);
+    if (isVacateSuccess) {
+      navigate('/stall-monitoring');
     }
   };
 
@@ -189,7 +235,6 @@ export default function StallDetails() {
   const paymentStatus = currentPayment?.status || 'Unpaid';
   const statusClass = paymentStatus.toLowerCase() === 'overdue' ? 'overdue' : (paymentStatus.toLowerCase() === 'paid' ? 'paid' : 'unpaid');
   
-  // --- DYNAMIC BILLING CYCLE INDICATOR ---
   let billingCycleText = '1st of the month';
   if (currentPayment?.due_date) {
     const day = new Date(currentPayment.due_date).getDate();
@@ -228,7 +273,6 @@ export default function StallDetails() {
           </div>
         </div>
 
-        {/* FIXED: CLEARER PAYMENT INDICATORS */}
         <div className="data-panel">
           <div className="data-header">
             <h2>Payment Status</h2>
@@ -325,16 +369,27 @@ export default function StallDetails() {
                     <td>{payment.month_covered ? new Date(payment.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}</td>
                     <td><span className={`status-badge ${payment.status?.toLowerCase() || 'paid'}`}>{payment.status || 'Paid'}</span></td>
                     <td>
-                      <button 
-                        className="btn-action danger" 
-                        title="Delete Payment"
-                        onClick={() => {
-                          setSelectedPaymentToDelete(payment);
-                          setDeletePaymentModalOpen(true);
-                        }}
-                      >
-                        <i className="fa-solid fa-trash"></i>
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                          className="btn-action" 
+                          title="Print Receipt"
+                          onClick={() => navigate(`/receipt?id=${payment.id}`)}
+                          style={{ color: '#3b82f6' }}
+                        >
+                          <i className="fa-solid fa-print"></i>
+                        </button>
+
+                        <button 
+                          className="btn-action danger" 
+                          title="Delete Payment"
+                          onClick={() => {
+                            setSelectedPaymentToDelete(payment);
+                            setDeletePaymentModalOpen(true);
+                          }}
+                        >
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -369,14 +424,16 @@ export default function StallDetails() {
           <div className="modal-box">
             <div className="modal-icon danger-icon"><i className="fa-solid fa-user-slash"></i></div>
             <h3>Vacate this stall?</h3>
-            <p>This will remove the current tenant from the stall. Rent history will be preserved.</p>
+            <p>This will <strong>permanently delete</strong> the tenant and all their payment history from the database. This cannot be undone.</p>
             <div className="modal-details">
               <div><strong>Stall:</strong> {stall.stall_number}</div>
               <div><strong>Tenant:</strong> {tenant?.full_name || 'Unknown'}</div>
             </div>
             <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setVacateModalOpen(false)}>Cancel</button>
-              <button className="btn-danger" onClick={handleVacate}>Vacate Stall</button>
+              <button className="btn-cancel" onClick={() => setVacateModalOpen(false)} disabled={isDeleting}>Cancel</button>
+              <button className="btn-danger" onClick={handleVacate} disabled={isDeleting}>
+                {isDeleting ? 'Deleting...' : 'Delete & Vacate'}
+              </button>
             </div>
           </div>
         </div>
@@ -394,7 +451,7 @@ export default function StallDetails() {
               <div><strong>Status:</strong> {selectedPaymentToDelete.status}</div>
             </div>
             <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setDeletePaymentModalOpen(false)}>Cancel</button>
+              <button className="btn-cancel" onClick={() => setDeletePaymentModalOpen(false)} disabled={isDeleting}>Cancel</button>
               <button className="btn-danger" onClick={handleDeletePayment} disabled={isDeleting}>
                 {isDeleting ? 'Deleting...' : 'Delete Payment'}
               </button>
@@ -404,15 +461,15 @@ export default function StallDetails() {
       )}
 
       {showSuccessPopup && (
-        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setShowSuccessPopup(false) }}>
+        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) handleCloseSuccessPopup() }}>
           <div className="modal-box" style={{ textAlign: 'center', maxWidth: '400px' }}>
             <div className="modal-icon info-icon" style={{ background: '#ecfdf5', color: '#059669', margin: '0 auto 16px', borderRadius: '50%', width: '56px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <i className="fa-solid fa-check" style={{ fontSize: '24px' }}></i>
             </div>
-            <h3 style={{ fontSize: '20px', marginBottom: '8px' }}>Payment Deleted</h3>
+            <h3 style={{ fontSize: '20px', marginBottom: '8px' }}>Success</h3>
             <p style={{ fontSize: '15px', color: '#64748b', marginBottom: '24px' }}>{successMessage}</p>
             <div className="modal-actions">
-              <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setShowSuccessPopup(false)}>Okay</button>
+              <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleCloseSuccessPopup}>Okay</button>
             </div>
           </div>
         </div>
