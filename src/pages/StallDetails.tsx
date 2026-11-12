@@ -9,26 +9,31 @@ export default function StallDetails() {
   const navigate = useNavigate();
   const stallNumber = searchParams.get('stall');
 
-  // Get User Role
   const [userRole, setUserRole] = useState<string | null>(null);
 
   const [stall, setStall] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
   const [currentPayment, setCurrentPayment] = useState<any>(null);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [totalOutstanding, setTotalOutstanding] = useState(0);
+  const [unpaidBills, setUnpaidBills] = useState<any[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // --- MODAL STATES ---
   const [vacateModalOpen, setVacateModalOpen] = useState(false);
   const [deletePaymentModalOpen, setDeletePaymentModalOpen] = useState(false);
+  const [payBalanceModalOpen, setPayBalanceModalOpen] = useState(false);
+  
   const [selectedPaymentToDelete, setSelectedPaymentToDelete] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
+  const [payMonths, setPayMonths] = useState(1);
 
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-  const [isVacateSuccess, setIsVacateSuccess] = useState(false); // Tracks if the popup is for vacating
+  const [isVacateSuccess, setIsVacateSuccess] = useState(false);
 
   const [showPermissionPopup, setShowPermissionPopup] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState('');
@@ -66,36 +71,83 @@ export default function StallDetails() {
       }
       setStall({ ...stallData, sections: sectionData });
 
+      let activeTenant = null;
       if (stallData.status === 'Occupied') {
         const { data: tenantData } = await supabase.from('tenants').select('*').eq('stall_id', stallData.id).eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle();
-        if (tenantData) setTenant(tenantData);
+        if (tenantData) {
+          activeTenant = tenantData;
+          setTenant(tenantData);
+        }
       }
 
-      // Fetch ALL history, newest first based on due date
       const { data: historyData } = await supabase
         .from('payments')
         .select('*')
         .eq('stall_id', stallData.id)
-        .order('due_date', { ascending: false })
-        .limit(20);
+        .order('month_covered', { ascending: true }); 
       
-      if (historyData && historyData.length > 0) {
-        
-        const latestPaid = historyData.find((p: any) => p.status === 'Paid');
-        const nextPending = historyData.find((p: any) => p.status === 'Pending' || p.status === 'Overdue');
+      if (historyData) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-        if (latestPaid) {
-          setCurrentPayment(latestPaid);
-        } else if (nextPending) {
+        const unpaid = historyData.filter((p: any) => p.status !== 'Paid' && !String(p.month_covered).includes('-partial'));
+        const paid = historyData.filter((p: any) => p.status === 'Paid');
+
+        const processedUnpaid = unpaid.map((bill: any) => {
+          const dueDate = new Date(bill.due_date);
+          const graceDays = bill.grace_period_days || 3;
+          
+          const penaltyStartDate = new Date(dueDate);
+          penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+          
+          if (today > penaltyStartDate && bill.status === 'Pending') {
+            const penaltyAmount = Number(bill.amount) * 0.05; 
+            return { 
+              ...bill, 
+              status: 'Overdue', 
+              penalty: penaltyAmount,
+              total_due: Number(bill.amount) + penaltyAmount
+            };
+          }
+          return { ...bill, total_due: Number(bill.amount) };
+        });
+
+        const unpaidTotal = processedUnpaid.reduce((sum, p) => sum + Number(p.total_due), 0);
+        setTotalOutstanding(unpaidTotal);
+        setUnpaidBills(processedUnpaid);
+
+        const nextPending = processedUnpaid.find((p: any) => p.status === 'Pending' || p.status === 'Overdue');
+        const latestPaid = [...paid].reverse().find((p: any) => true);
+
+        if (nextPending) {
           setCurrentPayment(nextPending);
+        } else if (latestPaid) {
+          const regDate = activeTenant?.registration_date ? new Date(activeTenant.registration_date) : new Date();
+          const nextDue = new Date();
+          nextDue.setDate(regDate.getDate());
+          
+          if (nextDue <= new Date()) {
+             nextDue.setMonth(nextDue.getMonth() + 1);
+          }
+
+          setCurrentPayment({
+            ...latestPaid,
+            status: 'Paid',
+            amount: stallData.monthly_rent,
+            month_covered: null,
+            due_date: nextDue.toISOString().split('T')[0]
+          });
+        } else {
+          setCurrentPayment(null);
         }
 
-        const paidOnly = historyData.filter((p: any) => p.status === 'Paid');
-        setPaymentHistory(paidOnly);
+        setPaymentHistory([...paid].reverse());
 
       } else {
         setPaymentHistory([]);
         setCurrentPayment(null);
+        setTotalOutstanding(0);
+        setUnpaidBills([]);
       }
 
     } catch (error: any) {
@@ -115,28 +167,16 @@ export default function StallDetails() {
       return;
     }
 
-    setIsDeleting(true); // Show loading on the button
+    setIsDeleting(true);
 
     try {
-      // 1. Delete all payments for this stall
       await supabase.from('payments').delete().eq('stall_id', stall.id);
-
-      // 2. Delete any contracts linked to this tenant
       await supabase.from('contracts').delete().eq('tenant_id', tenant.id);
-
-      // 3. Delete the tenant completely from the database
       await supabase.from('tenants').delete().eq('id', tenant.id);
-      
-      // 4. Mark the stall as Vacant
-      await supabase.from('stalls').update({ 
-        status: 'Vacant', 
-        tenant_name: null 
-      }).eq('id', stall.id);
+      await supabase.from('stalls').update({ status: 'Vacant', tenant_name: null }).eq('id', stall.id);
 
-      // 5. Log the wipe action
       await recordAuditLog('Vacate & Delete', `Deleted tenant '${tenant.full_name}' and all their records from stall '${stall.stall_number}'.`, 'Stall', stall.id);
       
-      // 6. Show Success Popup
       setVacateModalOpen(false);
       setIsVacateSuccess(true);
       setSuccessMessage(`Tenant '${tenant.full_name}' and all their records have been successfully deleted.`);
@@ -164,7 +204,7 @@ export default function StallDetails() {
       );
 
       setSuccessMessage(`Payment for ${new Date(selectedPaymentToDelete.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} has been deleted.`);
-      setIsVacateSuccess(false); // Not a vacate action
+      setIsVacateSuccess(false);
       setShowSuccessPopup(true);
       
       setDeletePaymentModalOpen(false);
@@ -176,6 +216,60 @@ export default function StallDetails() {
       alert("Error deleting payment: " + err.message);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handlePayBalance = async () => {
+    if (!stall) return;
+
+    const monthlyRent = Number(stall.monthly_rent);
+    const amountToPay = payMonths * monthlyRent;
+
+    if (amountToPay <= 0 || amountToPay > totalOutstanding) {
+      alert("Invalid payment amount.");
+      return;
+    }
+
+    setIsActionLoading(true);
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      let remainingMonths = payMonths;
+
+      for (const bill of unpaidBills) {
+        if (remainingMonths <= 0) break;
+        
+        if (String(bill.month_covered).includes('-partial')) continue;
+
+        const receiptNum = `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 100000)}`;
+        const penaltyAmount = bill.status === 'Overdue' ? bill.penalty : 0;
+
+        await supabase.from('payments').update({
+          status: 'Paid',
+          payment_date: todayStr,
+          penalty: penaltyAmount,
+          receipt_number: receiptNum
+        }).eq('id', bill.id);
+
+        remainingMonths -= 1;
+      }
+
+      await recordAuditLog(
+        'Pay Balance',
+        `Paid for ${payMonths} month(s) (₱${amountToPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}) towards balance for ${tenant?.full_name}.`,
+        'Stall',
+        stall.id
+      );
+
+      setPayBalanceModalOpen(false);
+      setSuccessMessage(`Payment for ${payMonths} month(s) (₱${amountToPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}) recorded successfully.`);
+      setIsVacateSuccess(false);
+      setShowSuccessPopup(true);
+      
+      fetchData();
+    } catch (err: any) {
+      alert("Error processing payment: " + err.message);
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -213,6 +307,16 @@ export default function StallDetails() {
     }
   };
 
+  const handlePayBalanceClick = () => {
+    if (userRole === 'Administrator' || userRole === 'Meedo Personnel' || userRole === 'Treasury') {
+      setPayMonths(1);
+      setPayBalanceModalOpen(true);
+    } else {
+      setPermissionMessage("Only Administrators, Meedo Personnel, and Treasury can record payments.");
+      setShowPermissionPopup(true);
+    }
+  };
+
   if (isLoading || userRole === null) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%', background: '#f8fafc' }}>
@@ -236,11 +340,17 @@ export default function StallDetails() {
   const statusClass = paymentStatus.toLowerCase() === 'overdue' ? 'overdue' : (paymentStatus.toLowerCase() === 'paid' ? 'paid' : 'unpaid');
   
   let billingCycleText = '1st of the month';
-  if (currentPayment?.due_date) {
+  if (tenant?.registration_date) {
+    const day = new Date(tenant.registration_date).getDate();
+    const suffix = ['th', 'st', 'nd', 'rd'][(day % 10 > 3 ? 0 : (day % 100 - day % 10 != 10 ? day % 10 : 0))] || 'th';
+    billingCycleText = `${day}${suffix} of the month`;
+  } else if (currentPayment?.due_date) {
     const day = new Date(currentPayment.due_date).getDate();
     const suffix = ['th', 'st', 'nd', 'rd'][(day % 10 > 3 ? 0 : (day % 100 - day % 10 != 10 ? day % 10 : 0))] || 'th';
     billingCycleText = `${day}${suffix} of the month`;
   }
+
+  const maxMonthsCanPay = stall ? Math.floor(totalOutstanding / Number(stall.monthly_rent)) : 0;
 
   return (
     <div className="content-wrapper">
@@ -289,7 +399,7 @@ export default function StallDetails() {
               <span className="info-label">Payment Covers</span>
               <span className="info-value">
                 {currentPayment?.month_covered 
-                  ? new Date(currentPayment.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                  ? new Date(String(currentPayment.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
                   : new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
               </span>
             </div>
@@ -366,7 +476,7 @@ export default function StallDetails() {
                     <td>{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
                     <td>₱{Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     <td>{payment.receipt_number || '—'}</td>
-                    <td>{payment.month_covered ? new Date(payment.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}</td>
+                    <td>{payment.month_covered ? new Date(String(payment.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}</td>
                     <td><span className={`status-badge ${payment.status?.toLowerCase() || 'paid'}`}>{payment.status || 'Paid'}</span></td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px' }}>
@@ -406,9 +516,16 @@ export default function StallDetails() {
           </button>
         ) : (
           <>
-            <Link to={`/pay-rent?stall=${stall.id}`} className="btn-primary">
-              <i className="fa-solid fa-money-bill-wave"></i> Record Rent Payment
-            </Link>
+            {totalOutstanding > 0 ? (
+              <button onClick={handlePayBalanceClick} className="btn-primary" style={{ background: '#059669', borderColor: '#059669' }}>
+                <i className="fa-solid fa-money-bill-wave"></i> Pay Balance
+              </button>
+            ) : (
+              <Link to={`/pay-rent?stall=${stall.id}`} className="btn-primary">
+                <i className="fa-solid fa-money-bill-wave"></i> Record Rent Payment
+              </Link>
+            )}
+            
             <button onClick={handleEditTenantClick} className="btn-secondary">
               <i className="fa-solid fa-pen"></i> Edit Tenant
             </button>
@@ -454,6 +571,65 @@ export default function StallDetails() {
               <button className="btn-cancel" onClick={() => setDeletePaymentModalOpen(false)} disabled={isDeleting}>Cancel</button>
               <button className="btn-danger" onClick={handleDeletePayment} disabled={isDeleting}>
                 {isDeleting ? 'Deleting...' : 'Delete Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {payBalanceModalOpen && (
+        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setPayBalanceModalOpen(false) }}>
+          <div className="modal-box" style={{ maxWidth: '500px' }}>
+            <div className="modal-icon success-icon"><i className="fa-solid fa-money-bill-wave"></i></div>
+            <h3>Pay Outstanding Balance</h3>
+            <p>Select how many months to pay. The payment will be applied to the oldest unpaid months first.</p>
+
+            <div className="modal-details">
+              <div><strong>Tenant:</strong> {tenant?.full_name}</div>
+              <div><strong>Stall:</strong> {stall.stall_number}</div>
+              <div><strong>Monthly Rent:</strong> ₱{Number(stall.monthly_rent).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+              <div style={{ marginTop: '8px', padding: '10px', background: '#fef2f2', borderRadius: '8px' }}>
+                <strong style={{ color: '#dc2626' }}>Total Outstanding:</strong>{' '}
+                <span style={{ color: '#dc2626', fontWeight: 700, fontSize: '18px' }}>
+                  ₱{totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <div className="input-group" style={{ marginBottom: '16px', marginTop: '16px' }}>
+              <label>Select Months to Pay</label>
+              <select
+                value={payMonths}
+                onChange={(e) => setPayMonths(Number(e.target.value))}
+                style={{
+                  padding: '12px',
+                  fontSize: '16px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  width: '100%',
+                  backgroundColor: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                {Array.from({ length: maxMonthsCanPay }, (_, i) => i + 1).map(m => (
+                  <option key={m} value={m}>
+                    {m} Month{m > 1 ? 's' : ''} (₱{(m * Number(stall.monthly_rent)).toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={() => setPayBalanceModalOpen(false)} disabled={isActionLoading}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                style={{ background: '#059669', borderColor: '#059669', flex: 1, marginLeft: '8px' }}
+                onClick={handlePayBalance}
+                disabled={isActionLoading || maxMonthsCanPay === 0}
+              >
+                {isActionLoading ? 'Processing...' : `Pay ₱${(payMonths * Number(stall.monthly_rent)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               </button>
             </div>
           </div>

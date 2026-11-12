@@ -155,7 +155,7 @@
 
 table {
     width: 100%;
-    min-width: 900px; 
+    min-width: 1000px;
     border-collapse: separate;
     border-spacing: 0;
     text-align: center;
@@ -163,21 +163,21 @@ table {
 }
 
 /* PERFECT COLUMN WIDTHS (Total = 100%) */
-th:nth-child(1) { width: 22%; } /* Tenant */
-th:nth-child(2) { width: 10%; } /* Stall */
-th:nth-child(3) { width: 20%; } /* Contract Period */
-th:nth-child(4) { width: 16%; } /* Financials */
-th:nth-child(5) { width: 14%; } /* Status */
-th:nth-child(6) { width: 18%; } /* Actions */
+th:nth-child(1) { width: 20%; } /* Tenant */
+th:nth-child(2) { width: 9%; }  /* Stall */
+th:nth-child(3) { width: 18%; } /* Contract Period */
+th:nth-child(4) { width: 15%; } /* Financials */
+th:nth-child(5) { width: 11%; } /* Status */
+th:nth-child(6) { width: 27%; } /* Actions (wider for Pay Balance) */
 
 th {
-    background: #f8fafc; 
+    background: #f8fafc;
     color: #475569;
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
     padding: 16px 12px;
-    border-bottom: 2px solid #e2e8f0; 
+    border-bottom: 2px solid #e2e8f0;
     letter-spacing: 0.5px;
     text-align: center;
     white-space: nowrap;
@@ -290,11 +290,11 @@ tbody tr:hover td {
 .status-badge.terminated { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 
 /* FIXED: Specific style for No Contract */
-.status-badge.no-contract { 
-    background: #f8fafc; 
-    color: #64748b; 
-    border: 1px solid #cbd5e1; 
-    font-size: 10px; /* Smaller font to fit */
+.status-badge.no-contract {
+    background: #f8fafc;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
+    font-size: 10px;
     padding: 4px 8px;
 }
 
@@ -303,17 +303,17 @@ tbody tr:hover td {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 4px; /* Reduced gap to fit tightly */
-    flex-wrap: nowrap; 
+    gap: 4px;
+    flex-wrap: nowrap;
 }
 
 .btn-extend {
     background: #eff6ff;
     color: #2563eb;
     border: 1px solid #bfdbfe;
-    padding: 0 8px; /* Reduced padding */
+    padding: 0 8px;
     border-radius: 6px;
-    font-size: 11px; /* Smaller text */
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     display: inline-flex;
@@ -322,15 +322,44 @@ tbody tr:hover td {
     gap: 3px;
     transition: all 0.15s;
     white-space: nowrap;
-    height: 32px; /* Slightly shorter */
+    height: 32px;
 }
 
 .btn-extend:hover {
     background: #dbeafe;
 }
 
+/* 🛑 NEW: Pay Balance Button */
+.btn-pay-balance {
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    transition: all 0.15s;
+    white-space: nowrap;
+    height: 32px;
+}
+
+.btn-pay-balance:hover {
+    background: #d1fae5;
+    border-color: #6ee7b7;
+    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.2);
+}
+
+.btn-pay-balance:active {
+    transform: scale(0.97);
+}
+
 .btn-icon {
-    width: 32px; /* Matches height */
+    width: 32px;
     height: 32px;
     border: 1px solid #cbd5e1;
     background: white;
@@ -417,6 +446,8 @@ tbody tr:hover td {
 
 .info-icon { background: #eff6ff; color: #2563eb; }
 .danger-icon { background: #fef2f2; color: #dc2626; }
+/* 🛑 NEW: Success icon used by Pay Balance modal */
+.success-icon { background: #ecfdf5; color: #059669; }
 
 .modal-box h3 {
     font-size: 20px;
@@ -478,6 +509,51 @@ tbody tr:hover td {
 .input-group input[type="date"]:focus {
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* 🛑 NEW: Number input styling for Pay Balance modal */
+.input-group input[type="number"] {
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #0f172a;
+    outline: none;
+    width: 100%;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    -moz-appearance: textfield;
+}
+
+.input-group input[type="number"]::-webkit-outer-spin-button,
+.input-group input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.input-group input[type="number"]:focus {
+    border-color: #059669;
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+}
+
+/* 🛑 NEW: Quick-fill buttons inside Pay Balance modal */
+.quick-fill-btn {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
+    background: white;
+    color: #475569;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.quick-fill-btn:hover {
+    background: #f0fdf4;
+    color: #059669;
+    border-color: #a7f3d0;
 }
 
 .modal-actions {

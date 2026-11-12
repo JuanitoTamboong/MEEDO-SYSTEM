@@ -9,25 +9,24 @@ export default function Contracts() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Modals
   const [extendModalOpen, setExtendModalOpen] = useState(false);
   const [editDateModalOpen, setEditDateModalOpen] = useState(false);
   const [undoModalOpen, setUndoModalOpen] = useState(false);
-  const [detailsModalOpen, setDetailsModalOpen] = useState(false); 
-  
-  const [selectedContract, setSelectedContract] = useState<any>(null);
-  const [contractDetails, setContractDetails] = useState<any[]>([]); 
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [payBalanceModalOpen, setPayBalanceModalOpen] = useState(false);
 
-  // Form States
+  const [selectedContract, setSelectedContract] = useState<any>(null);
+  const [contractDetails, setContractDetails] = useState<any[]>([]);
+
   const [newEndDate, setNewEndDate] = useState('');
   const [payAll, setPayAll] = useState(false);
   const [editStartDate, setEditStartDate] = useState('');
   const [editEndDate, setEditEndDate] = useState('');
+  
+  const [payMonths, setPayMonths] = useState(1); 
 
-  // Action Loading State
   const [isActionLoading, setIsActionLoading] = useState(false);
 
-  // Success/Error Popup
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -61,16 +60,17 @@ export default function Contracts() {
           }
 
           const stallPayments = paymentsData?.filter(p => p.stall_id === t.stall_id) || [];
-          
+
           let validPayments = [];
           if (startDate && endDateStr) {
              const startObj = new Date(startDate);
              const endObj = new Date(endDateStr);
              endObj.setHours(23, 59, 59, 999);
-             
+
              validPayments = stallPayments.filter(p => {
                if (!p.month_covered) return false;
-               const pDate = new Date(p.month_covered);
+               const baseMonth = String(p.month_covered).replace('-partial', '');
+               const pDate = new Date(baseMonth);
                return pDate >= startObj && pDate <= endObj;
              });
           } else {
@@ -78,8 +78,6 @@ export default function Contracts() {
           }
 
           const paidTotal = validPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
-          
-          // 🛑 Count ALL unpaid bills for the balance
           const remainingTotal = validPayments.filter(p => p.status !== 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
 
           return {
@@ -94,7 +92,9 @@ export default function Contracts() {
             end_date: endDateStr,
             status: contractStatus,
             paid_total: paidTotal,
-            remaining_total: remainingTotal
+            remaining_total: remainingTotal,
+            registration_date: t.registration_date,
+            grace_period_days: t.grace_period_days || 3
           };
         });
 
@@ -103,7 +103,7 @@ export default function Contracts() {
           if (!b.end_date) return -1;
           return new Date(a.end_date).getTime() - new Date(b.end_date).getTime();
         });
-        
+
         setContracts(enriched);
       }
 
@@ -117,13 +117,13 @@ export default function Contracts() {
   const handleViewDetails = async (contract: any) => {
     setSelectedContract(contract);
     setDetailsModalOpen(true);
-    
+
     const { data } = await supabase
       .from('payments')
       .select('*')
       .eq('stall_id', contract.stall_id)
       .order('month_covered', { ascending: true });
-      
+
     if (data) setContractDetails(data);
   };
 
@@ -138,7 +138,7 @@ export default function Contracts() {
     if (selectedContract.end_date) {
       const currentEnd = new Date(selectedContract.end_date).setHours(0,0,0,0);
       const newEnd = new Date(newEndDate).setHours(0,0,0,0);
-      
+
       if (newEnd <= currentEnd) {
         setErrorMsg("The new end date must be later than the current end date to extend the contract.");
         return;
@@ -146,7 +146,7 @@ export default function Contracts() {
     }
 
     setIsActionLoading(true);
-    
+
     try {
       let targetContractId = selectedContract.id;
 
@@ -171,9 +171,11 @@ export default function Contracts() {
         }]);
       }
 
-      // Start generating from the contract start date to ensure full coverage
+      const regDate = new Date(selectedContract.registration_date || selectedContract.start_date || new Date());
+      const fixedDay = regDate.getDate();
+
       let current = new Date(selectedContract.start_date || new Date());
-      current.setHours(0, 0, 0, 0); 
+      current.setHours(0, 0, 0, 0);
 
       const end = new Date(newEndDate);
       const newPayments = [];
@@ -182,20 +184,12 @@ export default function Contracts() {
       while (current < end) {
         const year = current.getFullYear();
         const month = String(current.getMonth() + 1).padStart(2, '0');
-        const day = String(current.getDate()).padStart(2, '0');
-        const monthCovered = `${year}-${month}-${day}`;
-        const monthKey = `${year}-${month}`; 
+        const day = String(fixedDay).padStart(2, '0');
+        const monthCovered = `${year}-${month}-01`;
+        const monthKey = `${year}-${month}`;
 
         if (!generatedMonths.has(monthKey)) {
-          const nextDue = new Date(current);
-          const originalDay = nextDue.getDate();
-          nextDue.setMonth(nextDue.getMonth() + 1);
-          
-          if (nextDue.getDate() !== originalDay) {
-            nextDue.setDate(0); // Adjust for months with fewer days
-          }
-          
-          const dueDateStr = nextDue.toISOString().split('T')[0];
+          const dueDateStr = `${year}-${month}-${day}`;
 
           newPayments.push({
             stall_id: selectedContract.stall_id,
@@ -203,33 +197,31 @@ export default function Contracts() {
             amount: selectedContract.monthly_rent,
             due_date: dueDateStr,
             month_covered: monthCovered,
-            status: 'Pending'
+            status: 'Pending',
+            grace_period_days: 3
           });
-          
+
           generatedMonths.add(monthKey);
         }
-        
+
         current.setMonth(current.getMonth() + 1);
       }
 
-      // Insert new bills (ignore duplicates so we don't overwrite Paid records)
       if (newPayments.length > 0) {
-        await supabase.from('payments').upsert(newPayments, { 
+        await supabase.from('payments').upsert(newPayments, {
           onConflict: 'stall_id,month_covered',
-          ignoreDuplicates: true 
+          ignoreDuplicates: true
         });
       }
 
-      // ONLY mark as Paid if checkbox is ticked
       if (payAll && newPayments.length > 0) {
         const todayStr = new Date().toISOString().split('T')[0];
         const monthsToPay = newPayments.map(p => p.month_covered);
-        
-        // 🛑 Note: We use a "PAY-" prefix here so we can easily identify these later
+
         await supabase.from('payments')
-          .update({ 
-            status: 'Paid', 
-            payment_date: todayStr, 
+          .update({
+            status: 'Paid',
+            payment_date: todayStr,
             penalty: 0,
             receipt_number: `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 10000)}`
           })
@@ -241,10 +233,10 @@ export default function Contracts() {
       await recordAuditLog('Extend Contract', `Extended the contract for ${selectedContract.full_name} to ${newEndDate}.`, 'Contract', typeof targetContractId === 'number' ? targetContractId : undefined);
 
       setExtendModalOpen(false);
-      setSuccessMsg(`Contract extended to ${newEndDate}.`);
-      setPayAll(false); 
+      setSuccessMsg(`Contract extended to ${new Date(newEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`);
+      setPayAll(false);
       fetchContracts();
-      
+
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -255,11 +247,11 @@ export default function Contracts() {
   const handleEditDates = async () => {
     if (!selectedContract) return;
     setIsActionLoading(true);
-    
+
     try {
       const start = new Date(editStartDate);
       const end = new Date(editEndDate);
-      
+
       if (end <= start) throw new Error("The end date must be after the start date.");
 
       let targetContractId = selectedContract.id;
@@ -272,7 +264,7 @@ export default function Contracts() {
           end_date: editEndDate,
           status: end < new Date() ? 'Expired' : 'Active'
         }]).select().single();
-        
+
         if (createError) throw createError;
         targetContractId = newContract.id;
       } else {
@@ -297,20 +289,48 @@ export default function Contracts() {
     }
   };
 
-  // --- 🛑 FIXED: UNDO EXTENSION (Deletes Contract & Extension Bills, keeps REG payment) ---
   const handleUndoExtension = async () => {
     if (!selectedContract) return;
 
     setIsActionLoading(true);
-    
+
     try {
-      // 1. Delete ALL Pending bills AND any Paid bills that were created by an extension (receipt starts with "PAY-")
-      // This guarantees the initial registration bill (receipt starts with "REG-") is kept safe.
+      const { data: partialPaids } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('stall_id', selectedContract.stall_id)
+        .like('receipt_number', 'PAY-%')
+        .eq('status', 'Paid');
+
+      if (partialPaids && partialPaids.length > 0) {
+        const partialsByMonth = new Map<string, number>();
+        for (const p of partialPaids) {
+          const key = String(p.month_covered).replace('-partial', '');
+          const existing = partialsByMonth.get(key) || 0;
+          partialsByMonth.set(key, existing + Number(p.amount));
+        }
+
+        for (const [monthCovered, totalPaid] of partialsByMonth.entries()) {
+          const { data: pendingBill } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('stall_id', selectedContract.stall_id)
+            .eq('month_covered', monthCovered)
+            .eq('status', 'Pending')
+            .maybeSingle();
+
+          if (pendingBill) {
+            await supabase.from('payments')
+              .update({ amount: Number(pendingBill.amount) + totalPaid })
+              .eq('id', pendingBill.id);
+          }
+        }
+      }
+
       await supabase.from('payments').delete()
         .eq('stall_id', selectedContract.stall_id)
         .or('status.eq.Pending,receipt_number.like.PAY-%');
 
-      // 2. Delete the contract record
       if (!selectedContract.id.toString().startsWith('temp-')) {
         const { data: extensions } = await supabase
           .from('contract_extensions')
@@ -322,9 +342,9 @@ export default function Contracts() {
         if (extensions && extensions.length > 0) {
           const lastExt = extensions[0];
           await supabase.from('contract_extensions').delete().eq('id', lastExt.id);
-          await supabase.from('contracts').update({ 
-            end_date: lastExt.previous_end_date, 
-            status: lastExt.previous_end_date < new Date().toISOString().split('T')[0] ? 'Expired' : 'Active' 
+          await supabase.from('contracts').update({
+            end_date: lastExt.previous_end_date,
+            status: lastExt.previous_end_date < new Date().toISOString().split('T')[0] ? 'Expired' : 'Active'
           }).eq('id', selectedContract.id);
         } else {
           await supabase.from('contracts').delete().eq('id', selectedContract.id);
@@ -336,7 +356,93 @@ export default function Contracts() {
       setUndoModalOpen(false);
       setSuccessMsg('Extension undone. Created contract and extension bills deleted, initial payment preserved.');
       fetchContracts();
-      
+
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handlePayBalance = async () => {
+    if (!selectedContract) return;
+
+    const monthlyRent = Number(selectedContract.monthly_rent);
+    const amountToPay = payMonths * monthlyRent;
+
+    if (amountToPay <= 0) {
+      setErrorMsg("Please select a valid number of months.");
+      return;
+    }
+
+    if (amountToPay > Number(selectedContract.remaining_total)) {
+      setErrorMsg("Payment amount cannot exceed the outstanding balance.");
+      return;
+    }
+
+    setIsActionLoading(true);
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      let remainingMonths = payMonths;
+
+      const { data: unpaidBills } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('stall_id', selectedContract.stall_id)
+        .neq('status', 'Paid')
+        .order('month_covered', { ascending: true });
+
+      if (!unpaidBills || unpaidBills.length === 0) {
+        setErrorMsg("No unpaid bills found for this contract.");
+        return;
+      }
+
+      const contractStart = selectedContract.start_date ? new Date(selectedContract.start_date) : null;
+      const contractEnd = selectedContract.end_date ? new Date(selectedContract.end_date) : null;
+      if (contractEnd) contractEnd.setHours(23, 59, 59, 999);
+
+      const relevantBills = unpaidBills.filter(b => {
+        if (!b.month_covered) return false;
+        const baseMonth = String(b.month_covered).replace('-partial', '');
+        const d = new Date(baseMonth);
+        if (contractStart && d < contractStart) return false;
+        if (contractEnd && d > contractEnd) return false;
+        return true;
+      });
+
+      if (relevantBills.length === 0) {
+        setErrorMsg("No unpaid bills found within the contract period.");
+        return;
+      }
+
+      for (const bill of relevantBills) {
+        if (remainingMonths <= 0) break;
+        
+        if (String(bill.month_covered).includes('-partial')) continue;
+
+        const receiptNum = `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 100000)}`;
+        const penaltyAmount = bill.status === 'Overdue' ? bill.penalty : 0;
+
+        await supabase.from('payments').update({
+          status: 'Paid',
+          payment_date: todayStr,
+          penalty: penaltyAmount,
+          receipt_number: receiptNum
+        }).eq('id', bill.id);
+
+        remainingMonths -= 1;
+      }
+
+      await recordAuditLog(
+        'Pay Balance',
+        `Paid for ${payMonths} month(s) (₱${amountToPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}) towards balance for ${selectedContract.full_name}.`,
+        'Contract',
+        typeof selectedContract.id === 'number' ? selectedContract.id : undefined
+      );
+
+      setPayBalanceModalOpen(false);
+      setSuccessMsg(`Payment for ${payMonths} month(s) (₱${amountToPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}) recorded successfully.`);
+      fetchContracts();
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -346,8 +452,8 @@ export default function Contracts() {
 
   const filteredContracts = contracts.filter(c => {
     const search = searchQuery.toLowerCase();
-    const matchesSearch = c.full_name.toLowerCase().includes(search) || 
-                          c.business_name.toLowerCase().includes(search) || 
+    const matchesSearch = c.full_name.toLowerCase().includes(search) ||
+                          c.business_name.toLowerCase().includes(search) ||
                           c.stall_number.toLowerCase().includes(search);
     const matchesStatus = statusFilter === 'all' || c.status.toLowerCase() === statusFilter;
     return matchesSearch && matchesStatus;
@@ -356,6 +462,8 @@ export default function Contracts() {
   const activeCount = contracts.filter(c => c.status === 'Active').length;
   const expiredCount = contracts.filter(c => c.status === 'Expired').length;
   const totalOutstanding = contracts.reduce((sum, c) => sum + c.remaining_total, 0);
+
+  const maxMonthsCanPay = selectedContract ? Math.floor(Number(selectedContract.remaining_total) / Number(selectedContract.monthly_rent)) : 0;
 
   if (isLoading) {
     return (
@@ -443,8 +551,8 @@ export default function Contracts() {
                       <div className="date-range">
                         {c.start_date && c.end_date ? (
                           <>
-                            {new Date(c.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} 
-                            <i className="fa-solid fa-arrow-right"></i> 
+                            {new Date(c.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            <i className="fa-solid fa-arrow-right"></i>
                             {new Date(c.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </>
                         ) : (
@@ -472,7 +580,21 @@ export default function Contracts() {
                           <button className="btn-extend" onClick={() => { setSelectedContract(c); setNewEndDate(''); setExtendModalOpen(true); }}>
                             <i className="fa-solid fa-calendar-plus"></i> Extend
                           </button>
-                          
+
+                          {Number(c.remaining_total) > 0 && (
+                            <button
+                              className="btn-pay-balance"
+                              title="Pay outstanding balance"
+                              onClick={() => {
+                                setSelectedContract(c);
+                                setPayMonths(1);
+                                setPayBalanceModalOpen(true);
+                              }}
+                            >
+                              <i className="fa-solid fa-money-bill-wave"></i> Pay Balance
+                            </button>
+                          )}
+
                           <button className="btn-icon" title="View Payment History" onClick={() => handleViewDetails(c)}>
                             <i className="fa-solid fa-eye"></i>
                           </button>
@@ -494,7 +616,6 @@ export default function Contracts() {
         </div>
       </div>
 
-      {/* EXTEND MODAL */}
       {extendModalOpen && selectedContract && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setExtendModalOpen(false) }}>
           <div className="modal-box" style={{ maxWidth: '500px' }}>
@@ -508,10 +629,10 @@ export default function Contracts() {
             </div>
             <div className="input-group" style={{ marginBottom: '16px' }}>
               <label>New End Date</label>
-              <input 
-                type="date" 
-                value={newEndDate} 
-                onChange={(e) => setNewEndDate(e.target.value)} 
+              <input
+                type="date"
+                value={newEndDate}
+                onChange={(e) => setNewEndDate(e.target.value)}
                 min={
                   new Date(new Date().setMonth(new Date().getMonth() + 1))
                     .toISOString()
@@ -535,7 +656,6 @@ export default function Contracts() {
         </div>
       )}
 
-      {/* EDIT DATES MODAL */}
       {editDateModalOpen && selectedContract && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setEditDateModalOpen(false) }}>
           <div className="modal-box" style={{ maxWidth: '500px' }}>
@@ -566,7 +686,6 @@ export default function Contracts() {
         </div>
       )}
 
-      {/* UNDO MODAL */}
       {undoModalOpen && selectedContract && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setUndoModalOpen(false) }}>
           <div className="modal-box" style={{ maxWidth: '440px' }}>
@@ -587,14 +706,72 @@ export default function Contracts() {
         </div>
       )}
 
-      {/* VIEW DETAILS MODAL */}
+      {payBalanceModalOpen && selectedContract && (
+        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setPayBalanceModalOpen(false) }}>
+          <div className="modal-box" style={{ maxWidth: '500px' }}>
+            <div className="modal-icon success-icon"><i className="fa-solid fa-money-bill-wave"></i></div>
+            <h3>Pay Outstanding Balance</h3>
+            <p>Select how many months to pay. The payment will be applied to the oldest unpaid months first.</p>
+
+            <div className="modal-details">
+              <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
+              <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
+              <div><strong>Monthly Rent:</strong> ₱{Number(selectedContract.monthly_rent).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+              <div style={{ marginTop: '8px', padding: '10px', background: '#fef2f2', borderRadius: '8px' }}>
+                <strong style={{ color: '#dc2626' }}>Total Outstanding:</strong>{' '}
+                <span style={{ color: '#dc2626', fontWeight: 700, fontSize: '18px' }}>
+                  ₱{Number(selectedContract.remaining_total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <div className="input-group" style={{ marginBottom: '16px', marginTop: '16px' }}>
+              <label>Select Months to Pay</label>
+              <select
+                value={payMonths}
+                onChange={(e) => setPayMonths(Number(e.target.value))}
+                style={{
+                  padding: '12px',
+                  fontSize: '16px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  width: '100%',
+                  backgroundColor: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                {Array.from({ length: maxMonthsCanPay }, (_, i) => i + 1).map(m => (
+                  <option key={m} value={m}>
+                    {m} Month{m > 1 ? 's' : ''} (₱{(m * Number(selectedContract.monthly_rent)).toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={() => setPayBalanceModalOpen(false)} disabled={isActionLoading}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                style={{ background: '#059669', borderColor: '#059669', flex: 1, marginLeft: '8px' }}
+                onClick={handlePayBalance}
+                disabled={isActionLoading || maxMonthsCanPay === 0}
+              >
+                {isActionLoading ? 'Processing...' : `Pay ₱${(payMonths * Number(selectedContract.monthly_rent)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {detailsModalOpen && selectedContract && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setDetailsModalOpen(false) }}>
           <div className="modal-box" style={{ maxWidth: '700px' }}>
             <div className="modal-icon info-icon"><i className="fa-solid fa-file-invoice"></i></div>
             <h3>Payment History: {selectedContract.full_name}</h3>
             <p>Contract Period: {selectedContract.start_date ? new Date(selectedContract.start_date).toLocaleDateString() : 'N/A'} to {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString() : 'N/A'}</p>
-            
+
             <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto', marginTop: '20px' }}>
               <table style={{ width: '100%', fontSize: '13px' }}>
                 <thead>
@@ -608,7 +785,12 @@ export default function Contracts() {
                 <tbody>
                   {contractDetails.map(p => (
                     <tr key={p.id}>
-                      <td>{new Date(p.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</td>
+                      <td>
+                        {new Date(String(p.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                        {String(p.month_covered).includes('-partial') && (
+                          <span style={{ fontSize: '10px', color: '#f97316', marginLeft: '6px', fontWeight: 600 }}>(Remainder)</span>
+                        )}
+                      </td>
                       <td>{new Date(p.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                       <td>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       <td>
@@ -629,7 +811,6 @@ export default function Contracts() {
         </div>
       )}
 
-      {/* SUCCESS / ERROR POPUP */}
       {(successMsg || errorMsg) && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) { setSuccessMsg(''); setErrorMsg(''); } }}>
           <div className="modal-box" style={{ textAlign: 'center', maxWidth: '400px' }}>

@@ -12,12 +12,10 @@ interface AvailableStall {
 }
 
 export default function RegisterTenant() {
-  // Metrics
   const [totalTenants, setTotalTenants] = useState(0);
   const [newThisMonth, setNewThisMonth] = useState(0);
   const [availableStalls, setAvailableStalls] = useState<AvailableStall[]>([]);
 
-  // Form State
   const [formData, setFormData] = useState({
     full_name: '',
     date_of_birth: '',
@@ -29,7 +27,6 @@ export default function RegisterTenant() {
     business_name: ''
   });
 
-  // Status State
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -42,7 +39,6 @@ export default function RegisterTenant() {
   async function fetchData() {
     setIsLoading(true);
     try {
-      // 1. Fetch Metrics
       const { count: tenantsCount } = await supabase
         .from('tenants')
         .select('*', { count: 'exact', head: true })
@@ -60,7 +56,6 @@ export default function RegisterTenant() {
         .gte('created_at', startOfMonth.toISOString());
       setNewThisMonth(newCount || 0);
 
-      // 2. Fetch Available Stalls
       const { data: stallsData } = await supabase
         .from('stalls')
         .select('id, stall_number, section_id, monthly_rent')
@@ -85,7 +80,6 @@ export default function RegisterTenant() {
     setErrorMsg('');
     setSuccessMsg('');
 
-    // Basic Validation
     if (!formData.full_name || !formData.contact_number || !formData.stall_id || !formData.business_name) {
       setErrorMsg("Please fill in all required fields.");
       setIsSubmitting(false);
@@ -93,7 +87,6 @@ export default function RegisterTenant() {
     }
 
     try {
-      // 1. Check for duplicate active tenant
       const { data: existing } = await supabase
         .from('tenants')
         .select('id')
@@ -105,11 +98,12 @@ export default function RegisterTenant() {
         throw new Error("An active tenant with this name already exists.");
       }
 
-      // 2. Get Stall Details
       const selectedStall = availableStalls.find(s => s.id === Number(formData.stall_id));
       if (!selectedStall) throw new Error("Selected stall is no longer available.");
 
-      // 3. Insert Tenant
+      const today = new Date(); 
+      const todayString = today.toISOString().split('T')[0];
+
       const { data: tenantData, error: tenantError } = await supabase
         .from('tenants')
         .insert([{
@@ -121,27 +115,22 @@ export default function RegisterTenant() {
           city: formData.city.trim(),
           stall_id: selectedStall.id,
           business_name: formData.business_name.trim(),
-          status: 'active'
+          status: 'active',
+          registration_date: todayString
         }])
         .select()
         .single();
 
       if (tenantError) throw tenantError;
 
-      // 4. Update Stall to Occupied
       await supabase
         .from('stalls')
         .update({ status: 'Occupied', tenant_name: formData.full_name.trim() })
         .eq('id', selectedStall.id);
 
-      // 5. Create Initial Payment Record (FIXED TO 1 MONTH EXACT)
-      const today = new Date(); 
-      const todayString = today.toISOString().split('T')[0]; // e.g., "2026-11-11"
-      
-      // Calculate exactly one month later for the due date
       const nextMonth = new Date(today);
       nextMonth.setMonth(nextMonth.getMonth() + 1); 
-      const nextMonthString = nextMonth.toISOString().split('T')[0]; // e.g., "2026-12-11"
+      const nextMonthString = nextMonth.toISOString().split('T')[0];
 
       const receiptNumber = `REG-${todayString.replace(/-/g, '')}-${tenantData.id}`;
 
@@ -149,14 +138,14 @@ export default function RegisterTenant() {
         stall_id: selectedStall.id,
         tenant_name: formData.full_name.trim(),
         amount: selectedStall.monthly_rent,
-        payment_date: todayString,      // Date paid
-        due_date: nextMonthString,      // Due exactly 1 month later
-        month_covered: todayString,     // Covers the current registration month
+        payment_date: todayString,
+        due_date: nextMonthString,
+        month_covered: `${todayString.slice(0, 7)}-01`, 
         status: 'Paid',
-        receipt_number: receiptNumber
+        receipt_number: receiptNumber,
+        grace_period_days: 3
       }]);
 
-      // 6. Audit Log
       await recordAuditLog(
         'Register Tenant', 
         `Registered tenant '${formData.full_name}' to stall '${selectedStall.stall_number}'.`, 
@@ -164,13 +153,10 @@ export default function RegisterTenant() {
         tenantData.id
       );
 
-      // Success
       setSuccessMsg(`Tenant ${formData.full_name} registered successfully!`);
       
-      // Clear the form
       setFormData({ full_name: '', date_of_birth: '', contact_number: '', street: '', barangay: '', city: '', stall_id: '', business_name: '' });
       
-      // Refresh the available stalls dropdown
       fetchData(); 
 
     } catch (error: any) {
@@ -192,7 +178,6 @@ export default function RegisterTenant() {
 
   return (
     <div className="content-wrapper">
-      {/* Header */}
       <div className="page-header">
         <div>
           <h1>Register Tenant</h1>
@@ -205,7 +190,6 @@ export default function RegisterTenant() {
         </div>
       </div>
 
-      {/* Metrics */}
       <div className="metric-row">
         <div className="metric-box">
           <div className="metric-icon blue"><i className="fa-solid fa-users"></i></div>
@@ -230,7 +214,6 @@ export default function RegisterTenant() {
         </div>
       </div>
 
-      {/* Form Container */}
       <div className="form-container">
         
         <div className="form-header-bar">
@@ -245,7 +228,6 @@ export default function RegisterTenant() {
         <div className="form-body">
           <form onSubmit={handleSubmit}>
             
-            {/* Section 1: Personal Info */}
             <div className="form-section">
               <div className="section-header">
                 <div className="section-icon"><i className="fa-solid fa-user"></i></div>
@@ -267,7 +249,6 @@ export default function RegisterTenant() {
               </div>
             </div>
 
-            {/* Section 2: Address */}
             <div className="form-section">
               <div className="section-header">
                 <div className="section-icon"><i className="fa-solid fa-location-dot"></i></div>
@@ -289,7 +270,6 @@ export default function RegisterTenant() {
               </div>
             </div>
 
-            {/* Section 3: Business */}
             <div className="form-section">
               <div className="section-header">
                 <div className="section-icon"><i className="fa-solid fa-store"></i></div>
@@ -314,7 +294,6 @@ export default function RegisterTenant() {
               </div>
             </div>
 
-            {/* Actions */}
             <div className="form-actions">
               <button type="button" className="btn-outline" onClick={() => setFormData({ full_name: '', date_of_birth: '', contact_number: '', street: '', barangay: '', city: '', stall_id: '', business_name: '' })}>
                 Clear Form
@@ -327,7 +306,6 @@ export default function RegisterTenant() {
         </div>
       </div>
 
-      {/* SUCCESS POPUP */}
       {successMsg && (
         <div className="modal-backdrop active">
           <div className="modal-box" style={{ textAlign: 'center' }}>
@@ -345,7 +323,6 @@ export default function RegisterTenant() {
         </div>
       )}
 
-      {/* ERROR POPUP */}
       {errorMsg && (
         <div className="modal-backdrop active">
           <div className="modal-box" style={{ textAlign: 'center' }}>
