@@ -162,13 +162,13 @@ table {
     table-layout: fixed;
 }
 
-/* PERFECT COLUMN WIDTHS (Total = 100%) */
-th:nth-child(1) { width: 20%; } /* Tenant */
-th:nth-child(2) { width: 9%; }  /* Stall */
+/* 🛑 ADJUSTED COLUMN WIDTHS 🛑 */
+th:nth-child(1) { width: 18%; } /* Tenant */
+th:nth-child(2) { width: 8%; }  /* Stall */
 th:nth-child(3) { width: 18%; } /* Contract Period */
-th:nth-child(4) { width: 15%; } /* Financials */
-th:nth-child(5) { width: 11%; } /* Status */
-th:nth-child(6) { width: 27%; } /* Actions (wider for Pay Balance) */
+th:nth-child(4) { width: 14%; } /* Financials */
+th:nth-child(5) { width: 12%; } /* Status */
+th:nth-child(6) { width: 30%; } /* Actions (Wider to fit all buttons comfortably) */
 
 th {
     background: #f8fafc;
@@ -242,7 +242,7 @@ tbody tr:hover td {
     color: #94a3b8;
 }
 
-/* FINANCIALS CENTERED */
+/* 🛑 FINANCIALS CENTERED & ALIGNED 🛑 */
 .financials-grid {
     display: flex;
     flex-direction: column;
@@ -255,7 +255,8 @@ tbody tr:hover td {
     display: flex;
     justify-content: space-between;
     width: 100%;
-    max-width: 140px;
+    max-width: 160px; /* Prevents it from stretching too far */
+    align-items: center;
 }
 
 .fin-label {
@@ -289,7 +290,6 @@ tbody tr:hover td {
 .status-badge.expired { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 .status-badge.terminated { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 
-/* FIXED: Specific style for No Contract */
 .status-badge.no-contract {
     background: #f8fafc;
     color: #64748b;
@@ -301,9 +301,9 @@ tbody tr:hover td {
 /* --- Action Buttons --- */
 .action-buttons {
     display: flex;
-    justify-content: center;
+    justify-content: center; /* Centers buttons */
     align-items: center;
-    gap: 4px;
+    gap: 6px; /* Space between buttons */
     flex-wrap: nowrap;
 }
 
@@ -329,7 +329,6 @@ tbody tr:hover td {
     background: #dbeafe;
 }
 
-/* 🛑 NEW: Pay Balance Button */
 .btn-pay-balance {
     background: #ecfdf5;
     color: #059669;
@@ -407,7 +406,9 @@ tbody tr:hover td {
     margin-bottom: 4px;
 }
 
-/* --- Modals --- */
+/* =========================================
+   🛑 MODALS & THE ULTIMATE TABLE FIX 🛑
+   ========================================= */
 .modal-backdrop {
     position: fixed;
     inset: 0;
@@ -426,12 +427,56 @@ tbody tr:hover td {
 .modal-box {
     background: white;
     width: 100%;
-    max-width: 480px;
+    max-width: 650px;
     border-radius: 10px;
     padding: 28px;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
     max-height: 90vh;
     overflow-y: auto;
+}
+
+.modal-box .table-responsive {
+    width: 100% !important;
+    display: block !important;
+    overflow-x: hidden !important;
+    margin-top: 10px;
+}
+
+.modal-box .table-responsive table {
+    width: 100% !important;
+    min-width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    margin: 0 !important;
+}
+
+.modal-box .table-responsive table th:nth-child(1) { width: 30% !important; }
+.modal-box .table-responsive table th:nth-child(2) { width: 25% !important; }
+.modal-box .table-responsive table th:nth-child(3) { width: 25% !important; }
+.modal-box .table-responsive table th:nth-child(4) { width: 20% !important; }
+
+.modal-box .table-responsive table th,
+.modal-box .table-responsive table td {
+    text-align: center !important;
+    vertical-align: middle !important;
+    padding: 14px 10px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    white-space: normal !important;
+}
+
+.modal-box .table-responsive table th {
+    background: #f8fafc !important;
+    font-size: 11px !important;
+    color: #64748b !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+}
+
+.modal-box .table-responsive table td {
+    font-size: 13px !important;
+    color: #0f172a !important;
+    background: #ffffff !important;
 }
 
 .modal-icon {
@@ -446,7 +491,6 @@ tbody tr:hover td {
 
 .info-icon { background: #eff6ff; color: #2563eb; }
 .danger-icon { background: #fef2f2; color: #dc2626; }
-/* 🛑 NEW: Success icon used by Pay Balance modal */
 .success-icon { background: #ecfdf5; color: #059669; }
 
 .modal-box h3 {
@@ -474,14 +518,9 @@ tbody tr:hover td {
     line-height: 1.6;
 }
 
-.modal-details div {
-    margin-bottom: 6px;
-}
-.modal-details div:last-child {
-    margin-bottom: 0;
-}
+.modal-details div { margin-bottom: 6px; }
+.modal-details div:last-child { margin-bottom: 0; }
 
-/* --- Modal Form Inputs --- */
 .input-group {
     display: flex;
     flex-direction: column;
@@ -494,24 +533,7 @@ tbody tr:hover td {
     color: #334155;
 }
 
-.input-group input[type="date"] {
-    padding: 10px 12px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    font-size: 14px;
-    color: #0f172a;
-    outline: none;
-    width: 100%;
-    font-family: inherit;
-    transition: border-color 0.2s;
-}
-
-.input-group input[type="date"]:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-/* 🛑 NEW: Number input styling for Pay Balance modal */
+.input-group input[type="date"], 
 .input-group input[type="number"] {
     padding: 10px 12px;
     border: 1px solid #cbd5e1;
@@ -522,21 +544,14 @@ tbody tr:hover td {
     width: 100%;
     font-family: inherit;
     transition: border-color 0.2s;
-    -moz-appearance: textfield;
 }
 
-.input-group input[type="number"]::-webkit-outer-spin-button,
-.input-group input[type="number"]::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
-
+.input-group input[type="date"]:focus, 
 .input-group input[type="number"]:focus {
-    border-color: #059669;
-    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-/* 🛑 NEW: Quick-fill buttons inside Pay Balance modal */
 .quick-fill-btn {
     flex: 1;
     padding: 6px 10px;
@@ -575,14 +590,8 @@ tbody tr:hover td {
     transition: background 0.2s;
 }
 
-.btn-primary:hover:not(:disabled) {
-    background: #1d4ed8;
-}
-
-.btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
+.btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .btn-danger {
     background: #dc2626;
@@ -595,9 +604,7 @@ tbody tr:hover td {
     cursor: pointer;
 }
 
-.btn-danger:hover:not(:disabled) {
-    background: #b91c1c;
-}
+.btn-danger:hover:not(:disabled) { background: #b91c1c; }
 
 .btn-cancel {
     background: white;
@@ -610,9 +617,7 @@ tbody tr:hover td {
     cursor: pointer;
 }
 
-.btn-cancel:hover:not(:disabled) {
-    background: #f1f5f9;
-}
+.btn-cancel:hover:not(:disabled) { background: #f1f5f9; }
 
 /* --- Responsive --- */
 @media (max-width: 768px) {
@@ -631,13 +636,7 @@ tbody tr:hover td {
         width: 100%;
         align-items: stretch;
     }
-    .input-with-icon {
-        width: 100%;
-    }
-    .input-with-icon input {
-        width: 100%;
-    }
-    .filters select {
-        width: 100%;
-    }
+    .input-with-icon { width: 100%; }
+    .input-with-icon input { width: 100%; }
+    .filters select { width: 100%; }
 }
