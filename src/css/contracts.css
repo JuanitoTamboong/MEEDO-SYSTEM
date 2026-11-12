@@ -33,7 +33,6 @@
     gap: 8px;
 }
 
-/* --- Metric Row --- */
 .metric-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -82,7 +81,6 @@
     line-height: 1;
 }
 
-/* --- Data Panel --- */
 .data-panel {
     background: white;
     border: 1px solid #e2e8f0;
@@ -147,7 +145,6 @@
     background: #fff;
 }
 
-/* --- THE TABLE --- */
 .table-responsive {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -162,13 +159,12 @@ table {
     table-layout: fixed;
 }
 
-/* 🛑 ADJUSTED COLUMN WIDTHS 🛑 */
-th:nth-child(1) { width: 18%; } /* Tenant */
-th:nth-child(2) { width: 8%; }  /* Stall */
-th:nth-child(3) { width: 18%; } /* Contract Period */
-th:nth-child(4) { width: 14%; } /* Financials */
-th:nth-child(5) { width: 12%; } /* Status */
-th:nth-child(6) { width: 30%; } /* Actions (Wider to fit all buttons comfortably) */
+th:nth-child(1) { width: 18%; }
+th:nth-child(2) { width: 8%; }
+th:nth-child(3) { width: 18%; }
+th:nth-child(4) { width: 14%; }
+th:nth-child(5) { width: 12%; }
+th:nth-child(6) { width: 30%; }
 
 th {
     background: #f8fafc;
@@ -197,7 +193,6 @@ tbody tr:hover td {
     background-color: #f8fafc;
 }
 
-/* --- Table Content Styling --- */
 .tenant-name {
     font-weight: 600;
     color: #0f172a;
@@ -226,7 +221,6 @@ tbody tr:hover td {
     white-space: nowrap;
 }
 
-/* DATES ON ONE LINE */
 .date-range {
     font-size: 13px;
     color: #475569;
@@ -242,7 +236,6 @@ tbody tr:hover td {
     color: #94a3b8;
 }
 
-/* 🛑 FINANCIALS CENTERED & ALIGNED 🛑 */
 .financials-grid {
     display: flex;
     flex-direction: column;
@@ -255,7 +248,7 @@ tbody tr:hover td {
     display: flex;
     justify-content: space-between;
     width: 100%;
-    max-width: 160px; /* Prevents it from stretching too far */
+    max-width: 160px;
     align-items: center;
 }
 
@@ -274,7 +267,6 @@ tbody tr:hover td {
 .text-red { color: #dc2626; }
 .text-muted { color: #94a3b8; font-style: italic; font-size: 13px; }
 
-/* --- Status Badges --- */
 .status-badge {
     display: inline-flex;
     align-items: center;
@@ -298,12 +290,11 @@ tbody tr:hover td {
     padding: 4px 8px;
 }
 
-/* --- Action Buttons --- */
 .action-buttons {
     display: flex;
-    justify-content: center; /* Centers buttons */
+    justify-content: center;
     align-items: center;
-    gap: 6px; /* Space between buttons */
+    gap: 6px;
     flex-wrap: nowrap;
 }
 
@@ -323,6 +314,7 @@ tbody tr:hover td {
     transition: all 0.15s;
     white-space: nowrap;
     height: 32px;
+    flex: 0 0 auto;
 }
 
 .btn-extend:hover {
@@ -345,6 +337,7 @@ tbody tr:hover td {
     transition: all 0.15s;
     white-space: nowrap;
     height: 32px;
+    flex: 0 0 auto;
 }
 
 .btn-pay-balance:hover {
@@ -369,8 +362,8 @@ tbody tr:hover td {
     align-items: center;
     justify-content: center;
     transition: all 0.15s;
-    flex-shrink: 0;
     font-size: 12px;
+    flex: 0 0 auto;
 }
 
 .btn-icon:hover {
@@ -385,7 +378,6 @@ tbody tr:hover td {
     border-color: #fecaca;
 }
 
-/* --- Empty States --- */
 .empty-state {
     padding: 60px 20px;
     text-align: center;
@@ -406,9 +398,6 @@ tbody tr:hover td {
     margin-bottom: 4px;
 }
 
-/* =========================================
-   🛑 MODALS & THE ULTIMATE TABLE FIX 🛑
-   ========================================= */
 .modal-backdrop {
     position: fixed;
     inset: 0;
@@ -619,7 +608,6 @@ tbody tr:hover td {
 
 .btn-cancel:hover:not(:disabled) { background: #f1f5f9; }
 
-/* --- Responsive --- */
 @media (max-width: 768px) {
     .page-header {
         flex-direction: column;
