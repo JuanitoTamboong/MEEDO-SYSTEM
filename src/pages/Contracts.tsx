@@ -79,17 +79,8 @@ export default function Contracts() {
 
           const paidTotal = validPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
           
-          const today = new Date();
-          const currentMonth = today.getMonth();
-          const currentYear = today.getFullYear();
-
-          const remainingTotal = validPayments.filter(p => {
-            if (p.status === 'Paid') return false;
-            if (!p.due_date) return false;
-            const dueDate = new Date(p.due_date);
-            return (dueDate.getFullYear() < currentYear) || 
-                   (dueDate.getFullYear() === currentYear && dueDate.getMonth() <= currentMonth);
-          }).reduce((sum, p) => sum + Number(p.amount), 0);
+          // 🛑 Count ALL unpaid bills for the balance
+          const remainingTotal = validPayments.filter(p => p.status !== 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
 
           return {
             id: contractId,
@@ -180,34 +171,13 @@ export default function Contracts() {
         }]);
       }
 
-      const { data: existingPayments } = await supabase
-        .from('payments')
-        .select('month_covered, due_date, status')
-        .eq('stall_id', selectedContract.stall_id);
-
-      const paidMonths = new Set(
-        existingPayments?.filter(p => p.status === 'Paid').map(p => new Date(p.month_covered).toISOString().slice(0, 7)) || []
-      );
-
-      let current = new Date(selectedContract.end_date || new Date());
+      // Start generating from the contract start date to ensure full coverage
+      let current = new Date(selectedContract.start_date || new Date());
       current.setHours(0, 0, 0, 0); 
-      
-      if (existingPayments) {
-        const paidDueDates = existingPayments
-          .filter(p => p.status === 'Paid' && p.due_date)
-          .map(p => new Date(p.due_date).getTime());
-          
-        if (paidDueDates.length > 0) {
-          const latestPaidDueDate = new Date(Math.max(...paidDueDates));
-          if (latestPaidDueDate >= current) {
-             current = new Date(latestPaidDueDate);
-             current.setHours(0, 0, 0, 0);
-          }
-        }
-      }
 
       const end = new Date(newEndDate);
       const newPayments = [];
+      const generatedMonths = new Set();
 
       while (current < end) {
         const year = current.getFullYear();
@@ -216,13 +186,13 @@ export default function Contracts() {
         const monthCovered = `${year}-${month}-${day}`;
         const monthKey = `${year}-${month}`; 
 
-        if (!paidMonths.has(monthKey)) {
+        if (!generatedMonths.has(monthKey)) {
           const nextDue = new Date(current);
           const originalDay = nextDue.getDate();
           nextDue.setMonth(nextDue.getMonth() + 1);
           
           if (nextDue.getDate() !== originalDay) {
-            nextDue.setDate(0); 
+            nextDue.setDate(0); // Adjust for months with fewer days
           }
           
           const dueDateStr = nextDue.toISOString().split('T')[0];
@@ -235,31 +205,37 @@ export default function Contracts() {
             month_covered: monthCovered,
             status: 'Pending'
           });
+          
+          generatedMonths.add(monthKey);
         }
         
         current.setMonth(current.getMonth() + 1);
       }
 
+      // Insert new bills (ignore duplicates so we don't overwrite Paid records)
       if (newPayments.length > 0) {
-        await supabase.from('payments').upsert(newPayments, { onConflict: 'stall_id,month_covered' });
+        await supabase.from('payments').upsert(newPayments, { 
+          onConflict: 'stall_id,month_covered',
+          ignoreDuplicates: true 
+        });
       }
 
+      // ONLY mark as Paid if checkbox is ticked
       if (payAll && newPayments.length > 0) {
         const todayStr = new Date().toISOString().split('T')[0];
+        const monthsToPay = newPayments.map(p => p.month_covered);
         
-        for (const payment of newPayments) {
-          const receiptNumber = `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 10000)}`;
-          
-          await supabase.from('payments')
-            .update({ 
-              status: 'Paid', 
-              payment_date: todayStr, 
-              penalty: 0,
-              receipt_number: receiptNumber
-            })
-            .eq('stall_id', selectedContract.stall_id)
-            .eq('month_covered', payment.month_covered);
-        }
+        // 🛑 Note: We use a "PAY-" prefix here so we can easily identify these later
+        await supabase.from('payments')
+          .update({ 
+            status: 'Paid', 
+            payment_date: todayStr, 
+            penalty: 0,
+            receipt_number: `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 10000)}`
+          })
+          .eq('stall_id', selectedContract.stall_id)
+          .eq('status', 'Pending')
+          .in('month_covered', monthsToPay);
       }
 
       await recordAuditLog('Extend Contract', `Extended the contract for ${selectedContract.full_name} to ${newEndDate}.`, 'Contract', typeof targetContractId === 'number' ? targetContractId : undefined);
@@ -321,54 +297,44 @@ export default function Contracts() {
     }
   };
 
-  // --- FIXED: UNDO EXTENSION (Deletes ALL payments) ---
+  // --- 🛑 FIXED: UNDO EXTENSION (Deletes Contract & Extension Bills, keeps REG payment) ---
   const handleUndoExtension = async () => {
     if (!selectedContract) return;
-
-    // 🛑 Stop if there is no contract to undo
-    if (selectedContract.id.toString().startsWith('temp-')) {
-      setErrorMsg("This tenant has no formal contract to undo.");
-      setUndoModalOpen(false);
-      return;
-    }
 
     setIsActionLoading(true);
     
     try {
-      // 1. DELETE ALL PAYMENTS (Paid and Unpaid) generated by this contract
-      const restoreMonth = selectedContract.start_date ? selectedContract.start_date.slice(0, 7) + '-01' : new Date().toISOString().slice(0, 7) + '-01';
-      const currentMonth = selectedContract.end_date ? selectedContract.end_date.slice(0, 7) + '-01' : new Date().toISOString().slice(0, 7) + '-01';
-      
+      // 1. Delete ALL Pending bills AND any Paid bills that were created by an extension (receipt starts with "PAY-")
+      // This guarantees the initial registration bill (receipt starts with "REG-") is kept safe.
       await supabase.from('payments').delete()
         .eq('stall_id', selectedContract.stall_id)
-        // REMOVED .neq('status', 'Paid') so it wipes EVERYTHING
-        .gte('month_covered', restoreMonth)
-        .lt('month_covered', currentMonth);
+        .or('status.eq.Pending,receipt_number.like.PAY-%');
 
-      // 2. Delete the contract
-      const { data: extensions } = await supabase
-        .from('contract_extensions')
-        .select('*')
-        .eq('contract_id', selectedContract.id)
-        .order('id', { ascending: false })
-        .limit(1);
+      // 2. Delete the contract record
+      if (!selectedContract.id.toString().startsWith('temp-')) {
+        const { data: extensions } = await supabase
+          .from('contract_extensions')
+          .select('*')
+          .eq('contract_id', selectedContract.id)
+          .order('id', { ascending: false })
+          .limit(1);
 
-      if (extensions && extensions.length > 0) {
-        const lastExt = extensions[0];
-        await supabase.from('contract_extensions').delete().eq('id', lastExt.id);
-        await supabase.from('contracts').update({ 
-          end_date: lastExt.previous_end_date, 
-          status: lastExt.previous_end_date < new Date().toISOString().split('T')[0] ? 'Expired' : 'Active' 
-        }).eq('id', selectedContract.id);
-      } else {
-        // Delete the entire contract if no extensions exist
-        await supabase.from('contracts').delete().eq('id', selectedContract.id);
+        if (extensions && extensions.length > 0) {
+          const lastExt = extensions[0];
+          await supabase.from('contract_extensions').delete().eq('id', lastExt.id);
+          await supabase.from('contracts').update({ 
+            end_date: lastExt.previous_end_date, 
+            status: lastExt.previous_end_date < new Date().toISOString().split('T')[0] ? 'Expired' : 'Active' 
+          }).eq('id', selectedContract.id);
+        } else {
+          await supabase.from('contracts').delete().eq('id', selectedContract.id);
+        }
       }
 
-      await recordAuditLog('Undo Extension', `Undid the most recent extension for ${selectedContract.full_name} and wiped all records.`, 'Contract', selectedContract.id);
+      await recordAuditLog('Undo Extension', `Undid the contract extension for ${selectedContract.full_name}, preserving initial paid registration.`, 'Contract', typeof selectedContract.id === 'number' ? selectedContract.id : undefined);
 
       setUndoModalOpen(false);
-      setSuccessMsg('The contract and all its payments were successfully deleted.');
+      setSuccessMsg('Extension undone. Created contract and extension bills deleted, initial payment preserved.');
       fetchContracts();
       
     } catch (err: any) {
@@ -606,7 +572,7 @@ export default function Contracts() {
           <div className="modal-box" style={{ maxWidth: '440px' }}>
             <div className="modal-icon danger-icon"><i className="fa-solid fa-rotate-left"></i></div>
             <h3>Undo last extension?</h3>
-            <p>This will remove the most recent extension and delete <strong>ALL</strong> payments created by it. This action cannot be undone.</p>
+            <p>This will remove the most recent extension and delete <strong>PAY-</strong> and <strong>PENDING</strong> bills. Your initial <strong>REG-</strong> payment will be kept safe.</p>
             <div className="modal-details">
               <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
               <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
