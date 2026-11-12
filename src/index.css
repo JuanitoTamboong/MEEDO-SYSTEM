@@ -22,12 +22,71 @@
     --text-gray: #64748b;
     --bg-light: #f8fafc;
     --border-color: #e2e8f0;
+
+    /* Animation Tokens */
+    --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --transition-fast: 150ms;
+    --transition-base: 250ms;
+    --transition-slow: 400ms;
 }
 
 body {
     background-color: var(--bg-light);
     color: var(--text-dark);
     -webkit-font-smoothing: antialiased;
+    animation: fadeIn var(--transition-slow) var(--ease-smooth);
+}
+
+/* =========================================
+   ANIMATIONS
+   ========================================= */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulseSoft {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.05); }
+}
+
+@keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Respect user preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
 
 /* =========================================
@@ -40,6 +99,7 @@ body {
     margin-bottom: 24px;
     padding-bottom: 16px;
     border-bottom: 1px solid var(--border-color);
+    animation: fadeInDown var(--transition-slow) var(--ease-smooth);
 }
 
 .page-header h1 {
@@ -47,6 +107,7 @@ body {
     color: var(--text-dark);
     font-weight: 600;
     letter-spacing: -0.5px;
+    transition: color var(--transition-base) var(--ease-smooth);
 }
 
 .page-header p {
@@ -70,10 +131,11 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    transition: all 0.2s;
+    transition: all var(--transition-base) var(--ease-smooth);
+    will-change: transform, box-shadow;
+    position: relative;
+    overflow: hidden;
 }
-
-.btn-primary:hover { background: #2563eb; }
 
 .btn-secondary {
     background: white;
@@ -87,10 +149,11 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    transition: all 0.2s;
+    transition: all var(--transition-base) var(--ease-smooth);
+    will-change: transform, box-shadow;
+    position: relative;
+    overflow: hidden;
 }
-
-.btn-secondary:hover { background: #f1f5f9; }
 
 .btn-danger {
     background: #fef2f2;
@@ -104,10 +167,50 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    transition: all 0.2s;
+    transition: all var(--transition-base) var(--ease-smooth);
+    will-change: transform, box-shadow;
+    position: relative;
+    overflow: hidden;
 }
 
+/* Hover lift */
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn-danger:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+/* Press feedback */
+.btn-primary:active,
+.btn-secondary:active,
+.btn-danger:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: none;
+}
+
+.btn-primary:hover { background: #2563eb; }
+.btn-secondary:hover { background: #f1f5f9; }
 .btn-danger:hover { background: #fee2e2; }
+
+/* Subtle shine sweep on primary buttons */
+.btn-primary::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        120deg,
+        transparent 20%,
+        rgba(255, 255, 255, 0.25) 50%,
+        transparent 80%
+    );
+    transform: translateX(-100%);
+    transition: transform 600ms var(--ease-smooth);
+}
+
+.btn-primary:hover::after {
+    transform: translateX(100%);
+}
 
 /* =========================================
    4. SHARED BADGES & TABLES
@@ -118,10 +221,17 @@ body {
     justify-content: center;
     gap: 6px;
     padding: 6px 14px;
-    border-radius: 20px; 
+    border-radius: 20px;
     font-size: 12px;
     font-weight: 600;
     white-space: nowrap;
+    transition: transform var(--transition-base) var(--ease-spring),
+                box-shadow var(--transition-base) var(--ease-smooth);
+}
+
+.status-badge:hover {
+    transform: translateY(-1px) scale(1.03);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .status-active, .status-paid, .status-available { background: #ecfdf5; color: #059669; }
@@ -133,6 +243,7 @@ body {
     overflow-x: auto;
     background: #ffffff;
     -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+    animation: fadeInUp var(--transition-slow) var(--ease-smooth);
 }
 
 table {
@@ -143,13 +254,13 @@ table {
 }
 
 th {
-    background: var(--bg-light); 
+    background: var(--bg-light);
     color: #475569;
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
     padding: 16px 12px;
-    border-bottom: 2px solid var(--border-color); 
+    border-bottom: 2px solid var(--border-color);
     letter-spacing: 0.5px;
     text-align: center;
     white-space: nowrap;
@@ -165,8 +276,32 @@ td {
     background: #ffffff;
 }
 
+tbody tr {
+    transition: background-color var(--transition-fast) var(--ease-smooth),
+                transform var(--transition-fast) var(--ease-smooth);
+    animation: fadeInUp 350ms var(--ease-smooth) both;
+}
+
+/* Stagger rows (up to 12 rows) */
+tbody tr:nth-child(1)  { animation-delay: 30ms; }
+tbody tr:nth-child(2)  { animation-delay: 60ms; }
+tbody tr:nth-child(3)  { animation-delay: 90ms; }
+tbody tr:nth-child(4)  { animation-delay: 120ms; }
+tbody tr:nth-child(5)  { animation-delay: 150ms; }
+tbody tr:nth-child(6)  { animation-delay: 180ms; }
+tbody tr:nth-child(7)  { animation-delay: 210ms; }
+tbody tr:nth-child(8)  { animation-delay: 240ms; }
+tbody tr:nth-child(9)  { animation-delay: 270ms; }
+tbody tr:nth-child(10) { animation-delay: 300ms; }
+tbody tr:nth-child(11) { animation-delay: 330ms; }
+tbody tr:nth-child(12) { animation-delay: 360ms; }
+
 tbody tr:hover td {
     background-color: var(--bg-light);
+}
+
+tbody tr:hover {
+    transform: translateX(2px);
 }
 
 /* =========================================
@@ -180,10 +315,13 @@ tbody tr:hover td {
     align-items: center;
     justify-content: center;
     z-index: 9999;
+    opacity: 0;
+    transition: opacity var(--transition-base) var(--ease-smooth);
 }
 
 .modal-backdrop.active {
     display: flex;
+    opacity: 1;
 }
 
 .modal-box {
@@ -193,10 +331,55 @@ tbody tr:hover td {
     border-radius: 8px;
     padding: 24px;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    transform: scale(0.94) translateY(10px);
+    opacity: 0;
+    transition: transform var(--transition-base) var(--ease-spring),
+                opacity var(--transition-base) var(--ease-smooth);
+}
+
+.modal-backdrop.active .modal-box {
+    transform: scale(1) translateY(0);
+    opacity: 1;
 }
 
 /* =========================================
-   6. RESPONSIVE ADJUSTMENTS (MOBILE VIEW)
+   6. ACCESSIBILITY: FOCUS RING
+   ========================================= */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--primary-blue);
+    outline-offset: 2px;
+    transition: outline-offset var(--transition-fast) var(--ease-smooth);
+}
+
+/* =========================================
+   7. OPTIONAL: LOADING UTILITIES
+   ========================================= */
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        #f1f5f9 25%,
+        #e2e8f0 50%,
+        #f1f5f9 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite linear;
+    border-radius: 4px;
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+/* =========================================
+   8. RESPONSIVE ADJUSTMENTS (MOBILE VIEW)
    ========================================= */
 
 /* Tablet View (Screens smaller than 1024px) */
@@ -223,7 +406,7 @@ tbody tr:hover td {
 
     /* Make sure the table keeps a minimum width so columns don't squash */
     table {
-        min-width: 800px; 
+        min-width: 800px;
         table-layout: auto;
     }
 
@@ -238,6 +421,11 @@ tbody tr:hover td {
         max-width: 90%;
         padding: 20px;
     }
+
+    /* Reduce row slide on hover for touch devices */
+    tbody tr:hover {
+        transform: none;
+    }
 }
 
 /* Small Mobile View (Screens smaller than 480px) */
@@ -245,10 +433,18 @@ tbody tr:hover td {
     .page-header h1 {
         font-size: 20px;
     }
-    
+
     /* Make all buttons stretch to full width */
     .btn-primary, .btn-secondary, .btn-danger {
         width: 100%;
         justify-content: center;
+    }
+
+    /* Disable hover lift on small screens (touch-friendly) */
+    .btn-primary:hover,
+    .btn-secondary:hover,
+    .btn-danger:hover {
+        transform: none;
+        box-shadow: none;
     }
 }
