@@ -101,7 +101,8 @@ export default function StallDetails() {
           penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
           
           if (today > penaltyStartDate && bill.status === 'Pending') {
-            const penaltyAmount = Number(bill.amount) * 0.05; 
+            // 🛑 FIX: Changed to 25%
+            const penaltyAmount = Number(bill.amount) * 0.25; 
             return { 
               ...bill, 
               status: 'Overdue', 
@@ -409,7 +410,8 @@ export default function StallDetails() {
                 <div className="info-row">
                   <span className="info-label">{currentPayment.status === 'Paid' ? 'Amount Paid' : 'Amount Due'}</span>
                   <span className="info-value" style={{ fontWeight: 600 }}>
-                    ₱{Number(currentPayment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {/* 🛑 FIX: Show the total_due (with penalty) if overdue, otherwise show the base amount */}
+                    ₱{Number(currentPayment.status === 'Overdue' ? currentPayment.total_due : currentPayment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="info-row">
@@ -479,7 +481,7 @@ export default function StallDetails() {
                     <td>{payment.month_covered ? new Date(String(payment.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}</td>
                     <td><span className={`status-badge ${payment.status?.toLowerCase() || 'paid'}`}>{payment.status || 'Paid'}</span></td>
                     <td>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                         <button 
                           className="btn-action" 
                           title="Print Receipt"

@@ -64,15 +64,26 @@ export default function SendNotice() {
   const tenantName = tenant?.full_name || 'Valued Tenant';
   const stallNumber = stall?.stall_number || '';
   const amountDue = Number(payment?.amount || 0);
+  
+  // 🛑 FIX: Changed to 25%
   const penalty = Number(payment?.penalty || (amountDue * 0.25));
   const totalDue = amountDue + penalty;
+  
   const dueDate = payment?.due_date || new Date().toISOString().split('T')[0];
+  const graceDays = payment?.grace_period_days || 3;
   const contactNumber = tenant?.contact_number || '';
 
-  // Calculate Days Overdue
+  // 🛑 FIX: Calculate Days Overdue ACCURATELY (ignoring time of day)
   const dueDateObj = new Date(dueDate);
+  const penaltyStartDate = new Date(dueDateObj);
+  penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+  penaltyStartDate.setHours(0, 0, 0, 0); // Reset time
+
   const today = new Date();
-  const daysOverdue = Math.max(0, Math.floor((today.getTime() - dueDateObj.getTime()) / (1000 * 3600 * 24)));
+  today.setHours(0, 0, 0, 0); // Reset time
+
+  const diffTime = today.getTime() - penaltyStartDate.getTime();
+  const daysOverdue = diffTime > 0 ? Math.floor(diffTime / (1000 * 60 * 60 * 24)) : 0;
 
   // Format WhatsApp Number
   let waNumber = contactNumber.replace(/\D/g, '');
@@ -87,9 +98,6 @@ export default function SendNotice() {
     setTimeout(() => setCopied(false), 3000);
   };
 
-  // ==========================================
-  // BEAUTIFUL CENTERED LOADING SCREEN
-  // ==========================================
   if (isLoading) {
     return (
       <div style={{ 

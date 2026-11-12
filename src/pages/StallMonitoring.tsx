@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase/lib/supabase';
 import '../css/stall-monitoring.css';
 
-// TypeScript Interfaces
 interface Stall {
   id: number;
   stall_number: string;
@@ -33,18 +32,15 @@ export default function StallMonitoring() {
   const [overdueList, setOverdueList] = useState<OverduePayment[]>([]);
   const [sections, setSections] = useState<string[]>([]);
   
-  // Metrics
   const [totalStalls, setTotalStalls] = useState(0);
   const [paidCount, setPaidCount] = useState(0);
   const [unpaidCount, setUnpaidCount] = useState(0);
   const [overdueCount, setOverdueCount] = useState(0);
 
-  // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [sectionFilter, setSectionFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Loading State
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -54,43 +50,44 @@ export default function StallMonitoring() {
   async function fetchData() {
     setIsLoading(true);
     try {
-      // 1. Fetch raw data
       const { data: stallsData } = await supabase.from('stalls').select('*');
       const { data: tenantsData } = await supabase.from('tenants').select('*').eq('status', 'active');
       const { data: sectionsData } = await supabase.from('sections').select('*');
       
-      // FETCH ALL PAYMENTS
       const { data: paymentsData } = await supabase
         .from('payments')
         .select('*')
         .order('due_date', { ascending: false }); 
 
-      const { data: overdueData } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('status', 'Overdue')
-        .order('due_date', { ascending: true });
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-      // 2. Process and map the data together
       if (stallsData) {
         const mappedStalls: Stall[] = stallsData.map((s) => {
           const activeTenant = tenantsData?.find((t) => t.stall_id === s.id);
-          
-          // FIND ALL PAYMENTS FOR THIS STALL
           const stallPayments = paymentsData?.filter((p) => p.stall_id === s.id) || [];
           
-          // FIXED: Find the latest PAID record. If none, find the oldest PENDING one.
           const latestPaid = stallPayments.find(p => p.status === 'Paid');
-          const latestPending = stallPayments.find(p => p.status === 'Pending' || p.status === 'Overdue');
+          let latestPending = stallPayments.find(p => p.status === 'Pending' || p.status === 'Overdue');
           
-          // We use the latestPaid to show the status, but if they haven't paid, we show the pending one.
-          const currentRecord = latestPaid || latestPending;
+          if (latestPending) {
+            const dueDate = new Date(latestPending.due_date);
+            const graceDays = latestPending.grace_period_days || 3;
+            const penaltyStartDate = new Date(dueDate);
+            penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+            penaltyStartDate.setHours(0, 0, 0, 0);
 
+            if (today > penaltyStartDate) {
+              latestPending = { ...latestPending, status: 'Overdue' };
+            }
+          }
+
+          const currentRecord = latestPaid || latestPending;
           const section = sectionsData?.find((sec) => sec.id === s.section_id);
           
           let pStatus = 'Available';
           if (s.status === 'Occupied' && activeTenant) {
-            pStatus = currentRecord ? currentRecord.status : 'Pending';
+            pStatus = latestPending ? latestPending.status : (currentRecord ? currentRecord.status : 'Pending');
           }
 
           return {
@@ -102,7 +99,6 @@ export default function StallMonitoring() {
             contact_number: activeTenant?.contact_number || null,
             section_name: section?.section_name || null,
             payment_status: pStatus,
-            // If they are Paid, show the next due date (from the pending record). If not, show the due date of the pending record.
             due_date: latestPending?.due_date || currentRecord?.due_date || null
           };
         });
@@ -114,8 +110,18 @@ export default function StallMonitoring() {
         setOverdueCount(mappedStalls.filter(s => s.payment_status === 'Overdue').length);
       }
 
-      if (overdueData) {
-        const mappedOverdue = overdueData.map((o) => {
+      if (paymentsData) {
+        const dynamicOverdue = paymentsData.filter((p) => {
+          if (p.status === 'Paid') return false;
+          const dueDate = new Date(p.due_date);
+          const graceDays = p.grace_period_days || 3;
+          const penaltyStartDate = new Date(dueDate);
+          penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+          penaltyStartDate.setHours(0, 0, 0, 0);
+          return today > penaltyStartDate;
+        });
+
+        const mappedOverdue = dynamicOverdue.map((o) => {
           const stall = stallsData?.find(s => s.id === o.stall_id);
           const section = sectionsData?.find(sec => sec.id === stall?.section_id);
           
@@ -126,7 +132,7 @@ export default function StallMonitoring() {
             section_name: section?.section_name || null,
             amount: o.amount,
             due_date: o.due_date,
-            penalty: o.penalty
+            penalty: o.penalty || 0
           };
         });
         setOverdueList(mappedOverdue);
@@ -142,7 +148,6 @@ export default function StallMonitoring() {
     }
   }
 
-  // Filter Logic
   const filteredStalls = stalls.filter(stall => {
     const matchesSearch = 
       (stall.tenant_name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
@@ -152,7 +157,6 @@ export default function StallMonitoring() {
     return matchesSearch && matchesSection && matchesStatus;
   });
 
-  // Export Logic
   const exportTable = () => {
     const headers = ['Stall #', 'Tenant', 'Section', 'Contact', 'Monthly Rent', 'Status'];
     const csvRows = [headers.join(',')];
@@ -176,7 +180,6 @@ export default function StallMonitoring() {
   return (
     <div className="content-wrapper">
       
-      {/* Header */}
       <div className="page-header">
         <div>
           <h1>Stall Monitoring</h1>
@@ -198,7 +201,6 @@ export default function StallMonitoring() {
         </div>
       </div>
 
-      {/* Metrics */}
       <div className="metric-row">
         <div className="metric-box">
           <div className="metric-icon blue"><i className="fa-solid fa-store"></i></div>
@@ -230,7 +232,6 @@ export default function StallMonitoring() {
         </div>
       </div>
 
-      {/* Table */}
       <div className="data-panel">
         <div className="data-header">
           <h2>Stall Directory</h2>
@@ -251,12 +252,8 @@ export default function StallMonitoring() {
           {isLoading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
               <div style={{ 
-                width: '40px', 
-                height: '40px', 
-                border: '4px solid #e2e8f0', 
-                borderTop: '4px solid #3b82f6', 
-                borderRadius: '50%', 
-                animation: 'spin 1s linear infinite' 
+                width: '40px', height: '40px', border: '4px solid #e2e8f0', borderTop: '4px solid #3b82f6', 
+                borderRadius: '50%', animation: 'spin 1s linear infinite' 
               }}></div>
               <p style={{ marginTop: '16px', color: '#64748b', fontSize: '14px' }}>Loading stalls...</p>
               <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
@@ -306,7 +303,8 @@ export default function StallMonitoring() {
                             >
                               <i className="fa-solid fa-eye"></i>
                             </button>
-                            {stall.tenant_name && stall.payment_status !== 'Paid' && (
+                            
+                            {stall.tenant_name && stall.payment_status === 'Pending' && (
                               <button 
                                 className="btn-action reminder" 
                                 title="Send Reminder" 
@@ -327,7 +325,6 @@ export default function StallMonitoring() {
         </div>
       </div>
 
-      {/* Overdue Accounts Panel */}
       {!isLoading && overdueList.length > 0 && (
         <div className="data-panel" style={{ marginTop: '24px' }}>
           <div className="data-header" style={{ borderBottom: '1px solid #e2e8f0' }}>
@@ -336,7 +333,8 @@ export default function StallMonitoring() {
             </h2>
           </div>
           <div className="table-responsive">
-            <table>
+            {/* 🛑 FIX: Added className="overdue-table" to target exactly 8 columns */}
+            <table className="overdue-table">
               <thead>
                 <tr>
                   <th>Stall #</th>
@@ -351,7 +349,18 @@ export default function StallMonitoring() {
               </thead>
               <tbody>
                 {overdueList.map(overdue => {
-                  const daysOverdue = Math.ceil((new Date().getTime() - new Date(overdue.due_date).getTime()) / (1000 * 3600 * 24));
+                  const dueDate = new Date(overdue.due_date);
+                  const graceDays = 3; 
+                  const penaltyStartDate = new Date(dueDate);
+                  penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+                  penaltyStartDate.setHours(0, 0, 0, 0); 
+
+                  const todayForCalc = new Date();
+                  todayForCalc.setHours(0, 0, 0, 0); 
+
+                  const diffTime = todayForCalc.getTime() - penaltyStartDate.getTime();
+                  const daysOverdue = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
                   const penalty = overdue.amount * 0.25;
                   const totalDue = overdue.amount + penalty;
 

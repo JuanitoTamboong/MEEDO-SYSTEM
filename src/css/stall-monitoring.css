@@ -1,4 +1,3 @@
-
 .page-header {
     display: flex;
     justify-content: space-between;
@@ -75,7 +74,6 @@
     border-color: #94a3b8;
 }
 
-/* --- Metric Row --- */
 .metric-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -125,7 +123,6 @@
     line-height: 1;
 }
 
-/* --- Data Panel --- */
 .data-panel {
     background: white;
     border: 1px solid #e2e8f0;
@@ -168,7 +165,6 @@
     background: #fff;
 }
 
-/* --- THE TABLE FIX --- */
 .table-responsive {
     overflow-x: auto;
     flex: 1;
@@ -180,17 +176,27 @@ table {
     border-collapse: separate;
     border-spacing: 0;
     text-align: center;
-    table-layout: fixed; /* FORCES STRICT COLUMN WIDTHS */
+    table-layout: fixed; 
 }
 
-/* Define specific widths for each column */
-th:nth-child(1) { width: 10%; } /* Stall # */
-th:nth-child(2) { width: 18%; } /* Tenant */
-th:nth-child(3) { width: 12%; } /* Section */
-th:nth-child(4) { width: 15%; } /* Contact */
-th:nth-child(5) { width: 15%; } /* Monthly Rent */
-th:nth-child(6) { width: 15%; } /* Status */
-th:nth-child(7) { width: 100px; } /* Actions - fixed width */
+/* Main Table Column Widths */
+th:nth-child(1) { width: 10%; }
+th:nth-child(2) { width: 18%; }
+th:nth-child(3) { width: 12%; }
+th:nth-child(4) { width: 15%; }
+th:nth-child(5) { width: 15%; }
+th:nth-child(6) { width: 15%; }
+th:nth-child(7) { width: 15%; }
+
+/* Overdue Table Column Widths */
+.overdue-table th:nth-child(1) { width: 10%; }
+.overdue-table th:nth-child(2) { width: 15%; }
+.overdue-table th:nth-child(3) { width: 10%; }
+.overdue-table th:nth-child(4) { width: 12%; }
+.overdue-table th:nth-child(5) { width: 10%; }
+.overdue-table th:nth-child(6) { width: 11%; }
+.overdue-table th:nth-child(7) { width: 14%; }
+.overdue-table th:nth-child(8) { width: 18%; }
 
 th {
     background: #f8fafc; 
@@ -219,19 +225,14 @@ tbody tr:hover td {
     background-color: #f8fafc;
 }
 
-/* =========================================
-   ACTION BUTTON ALIGNMENT FIX
-   ========================================= */
 .action-buttons {
     display: flex;
-    justify-content: flex-start; /* Align left to keep the first button in the same spot */
+    justify-content: center;
     align-items: center;
     gap: 8px;
-    width: 80px; /* Fixed width for 2 buttons */
-    margin: 0 auto; /* Center this container inside the cell */
+    margin: 0 auto;
 }
 
-/* --- Badges --- */
 .status-badge {
     display: inline-flex;
     align-items: center;
@@ -256,7 +257,6 @@ tbody tr:hover td {
     text-align: center;
 }
 
-/* --- Action Buttons --- */
 .btn-action {
     width: 34px;
     height: 34px;
@@ -289,7 +289,6 @@ tbody tr:hover td {
     background: #fef3c7;
 }
 
-/* --- Modals --- */
 .modal-backdrop {
     position: fixed;
     inset: 0;
@@ -398,7 +397,6 @@ tbody tr:hover td {
     background: #b91c1c;
 }
 
-/* --- Responsive --- */
 @media (max-width: 1024px) {
     .metric-row {
         grid-template-columns: repeat(2, 1fr);
