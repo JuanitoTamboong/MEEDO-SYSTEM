@@ -120,7 +120,7 @@ export default function StallDetails() {
         setUnpaidBills(processedUnpaid);
 
         const nextPending = processedUnpaid.find((p: any) => p.status === 'Pending' || p.status === 'Overdue');
-        const latestPaid = [...paid].reverse().find((p: any) => true);
+        const latestPaid = [...paid].reverse()[0];
 
         if (nextPending) {
           setCurrentPayment(nextPending);
