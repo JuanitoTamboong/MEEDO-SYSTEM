@@ -208,7 +208,8 @@ export default function ActivityLogs() {
       {/* DELETE SINGLE MODAL */}
       {deleteModalOpen && selectedLog && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setDeleteModalOpen(false) }}>
-          <div className="modal-box">
+          {/* FIX: Added inline maxWidth to prevent global stretching */}
+          <div className="modal-box" style={{ maxWidth: '450px' }}>
             <div className="modal-icon danger-icon"><i className="fa-solid fa-trash"></i></div>
             <h3>Delete log #{selectedLog.id}?</h3>
             <p>This action cannot be undone. The log entry will be permanently removed.</p>
@@ -229,7 +230,8 @@ export default function ActivityLogs() {
       {/* CLEAR ALL MODAL */}
       {clearAllModalOpen && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setClearAllModalOpen(false) }}>
-          <div className="modal-box">
+          {/* FIX: Added inline maxWidth to prevent global stretching */}
+          <div className="modal-box" style={{ maxWidth: '450px' }}>
             <div className="modal-icon danger-icon"><i className="fa-solid fa-trash"></i></div>
             <h3>Delete ALL activity logs?</h3>
             <p>This will permanently wipe every log entry.</p>
