@@ -35,10 +35,9 @@ const getIconClass = (iconName: string) => {
 export default function ManageStalls() {
   const [sections, setSections] = useState<Section[]>([]);
   const [stalls, setStalls] = useState<Stall[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
   
   // Form States
-  const [newSection, setNewSection] = useState({ name: '', icon: '', order: 0 });
+  const [newSection, setNewSection] = useState({ name: '', icon: '' });
   const [newStall, setNewStall] = useState({ sectionId: '', rent: '2000' });
   
   // Modal States
@@ -68,16 +67,19 @@ export default function ManageStalls() {
     const exists = sections.find(s => s.section_name.toLowerCase() === newSection.name.toLowerCase());
     if (exists) return alert("Section already exists!");
 
+    // Auto-assign display order (append to end)
+    const nextOrder = sections.length > 0 ? Math.max(...sections.map(s => s.display_order)) + 1 : 0;
+
     const { data, error } = await supabase.from('sections').insert([{
       section_name: newSection.name,
       icon_class: newSection.icon,
-      display_order: newSection.order
+      display_order: nextOrder
     }]).select();
 
     if (error) return alert(error.message);
     
     await recordAuditLog('Add Section', `Added market section '${newSection.name}'.`, 'Section', data[0].id);
-    setNewSection({ name: '', icon: '', order: 0 });
+    setNewSection({ name: '', icon: '' });
     fetchData();
   };
 
@@ -159,13 +161,6 @@ export default function ManageStalls() {
     }
   };
 
-  // Filtering
-  const filteredStalls = stalls.filter(stall => {
-    const search = searchQuery.toLowerCase();
-    return stall.stall_number.toLowerCase().includes(search) || 
-           (stall.tenant_name || '').toLowerCase().includes(search);
-  });
-
   return (
     <div className="content-wrapper">
       
@@ -176,15 +171,6 @@ export default function ManageStalls() {
           <p>Configure market sections, stalls, and base rental rates.</p>
         </div>
         <div className="header-tools">
-          <div className="input-with-icon">
-            <i className="fa-solid fa-magnifying-glass"></i>
-            <input 
-              type="text" 
-              placeholder="Search by stall or tenant..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
           <button className="btn-secondary">
             <i className="fa-solid fa-download"></i> Export
           </button>
@@ -239,14 +225,6 @@ export default function ManageStalls() {
                 {Object.keys(icon_list).map(name => <option key={name} value={name}>{name}</option>)}
               </select>
             </div>
-            <div className="input-group" style={{ flex: 1 }}>
-              <label>Order</label>
-              <input 
-                type="number" 
-                value={newSection.order}
-                onChange={e => setNewSection({ ...newSection, order: Number(e.target.value) })}
-              />
-            </div>
             <button type="submit" className="btn-primary"><i className="fa-solid fa-plus"></i> Add</button>
           </form>
         </div>
@@ -293,7 +271,7 @@ export default function ManageStalls() {
           <div className="empty-state"><i className="fa-solid fa-store"></i><p>No sections found. Add your first section above.</p></div>
         ) : (
           sections.map(section => {
-            const sectionStalls = filteredStalls.filter(s => s.section_id === section.id);
+            const sectionStalls = stalls.filter(s => s.section_id === section.id);
             const available = sectionStalls.filter(s => s.status === 'Vacant').length;
             const occupied = sectionStalls.filter(s => s.status === 'Occupied').length;
             
