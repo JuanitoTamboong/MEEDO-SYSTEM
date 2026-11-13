@@ -1,4 +1,8 @@
-.page-header {
+/* =========================================
+   MEEDO - STALL MONITORING (SCOPED)
+   ========================================= */
+
+.stall-monitoring-page .page-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
@@ -7,54 +11,75 @@
     border-bottom: 1px solid #e2e8f0;
 }
 
-.page-header h1 {
+.stall-monitoring-page .page-header h1 {
     font-size: 24px;
     color: #0f172a;
     font-weight: 600;
     letter-spacing: -0.5px;
+    margin: 0;
 }
 
-.page-header p {
+.stall-monitoring-page .page-header p {
     color: #64748b;
     font-size: 13px;
     margin-top: 4px;
+    margin-bottom: 0;
 }
 
-.header-tools {
+.stall-monitoring-page .header-tools {
     display: flex;
     gap: 12px;
     align-items: center;
 }
 
-.input-with-icon {
+/* Search field and icon */
+.stall-monitoring-page .input-with-icon {
     position: relative;
+    width: 280px;
+    flex-shrink: 0;
 }
 
-.input-with-icon i {
+.stall-monitoring-page .input-with-icon i {
     position: absolute;
-    left: 12px;
+    left: 13px;
     top: 50%;
     transform: translateY(-50%);
+    width: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: #94a3b8;
     font-size: 14px;
+    pointer-events: none;
+    z-index: 2;
 }
 
-.input-with-icon input {
-    padding: 9px 12px 9px 36px;
+.stall-monitoring-page .input-with-icon input {
+    display: block;
+    width: 100%;
+    height: 42px;
+    box-sizing: border-box;
+    padding: 9px 12px 9px 40px !important;
     border: 1px solid #cbd5e1;
     border-radius: 6px;
     font-size: 13px;
-    width: 260px;
     outline: none;
     color: #0f172a;
+    background: #ffffff;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.input-with-icon input:focus {
+.stall-monitoring-page .input-with-icon input::placeholder {
+    color: #94a3b8;
+    opacity: 1;
+}
+
+.stall-monitoring-page .input-with-icon input:focus {
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.btn-secondary {
+.stall-monitoring-page .btn-secondary {
     background: white;
     border: 1px solid #cbd5e1;
     color: #475569;
@@ -65,23 +90,27 @@
     cursor: pointer;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
-    transition: all 0.2s;
+    min-height: 42px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
 }
 
-.btn-secondary:hover {
+.stall-monitoring-page .btn-secondary:hover {
     background: #f8fafc;
     border-color: #94a3b8;
 }
 
-.metric-row {
+/* Summary cards */
+.stall-monitoring-page .metric-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 20px;
     margin-bottom: 24px;
 }
 
-.metric-box {
+.stall-monitoring-page .metric-box {
     background: white;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
@@ -89,12 +118,14 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    min-width: 0;
 }
 
-.metric-icon {
+.stall-monitoring-page .metric-icon {
     width: 48px;
     height: 48px;
+    min-width: 48px;
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -102,12 +133,12 @@
     font-size: 20px;
 }
 
-.metric-icon.blue { background: #eff6ff; color: #3b82f6; }
-.metric-icon.green { background: #ecfdf5; color: #10b981; }
-.metric-icon.orange { background: #fff7ed; color: #f97316; }
-.metric-icon.red { background: #fef2f2; color: #ef4444; }
+.stall-monitoring-page .metric-icon.blue { background: #eff6ff; color: #3b82f6; }
+.stall-monitoring-page .metric-icon.green { background: #ecfdf5; color: #10b981; }
+.stall-monitoring-page .metric-icon.orange { background: #fff7ed; color: #f97316; }
+.stall-monitoring-page .metric-icon.red { background: #fef2f2; color: #ef4444; }
 
-.metric-label {
+.stall-monitoring-page .metric-label {
     font-size: 12px;
     color: #64748b;
     font-weight: 600;
@@ -116,45 +147,46 @@
     letter-spacing: 0.5px;
 }
 
-.metric-value {
+.stall-monitoring-page .metric-value {
     font-size: 26px;
     font-weight: 700;
     color: #0f172a;
     line-height: 1;
 }
 
-.data-panel {
+/* Panels and panel headers */
+.stall-monitoring-page .data-panel {
     background: white;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
     display: flex;
     flex-direction: column;
     min-height: 400px;
+    margin-bottom: 24px;
 }
 
-.data-header {
+.stall-monitoring-page .data-header {
     padding: 20px 24px;
     border-bottom: 1px solid #e2e8f0;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 16px;
     background: #ffffff;
 }
 
-.data-header h2 {
+.stall-monitoring-page .data-header h2 {
     font-size: 16px;
     font-weight: 600;
     color: #0f172a;
+    margin: 0;
 }
 
-.filters {
-    display: flex;
-    gap: 10px;
-}
+.stall-monitoring-page .filters { display: flex; gap: 10px; }
 
-.filters select {
+.stall-monitoring-page .filters select {
     padding: 8px 12px;
     border: 1px solid #cbd5e1;
     border-radius: 6px;
@@ -163,55 +195,63 @@
     outline: none;
     cursor: pointer;
     background: #fff;
+    min-height: 40px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.table-responsive {
+.stall-monitoring-page .filters select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Tables */
+.stall-monitoring-page .table-responsive {
     overflow-x: auto;
     flex: 1;
     background: #ffffff;
+    width: 100%;
 }
 
-table {
+.stall-monitoring-page .table-responsive table {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
     text-align: center;
-    table-layout: fixed; 
+    table-layout: fixed;
 }
 
-/* Main Table Column Widths */
-th:nth-child(1) { width: 10%; }
-th:nth-child(2) { width: 18%; }
-th:nth-child(3) { width: 12%; }
-th:nth-child(4) { width: 15%; }
-th:nth-child(5) { width: 15%; }
-th:nth-child(6) { width: 15%; }
-th:nth-child(7) { width: 15%; }
+.stall-monitoring-page #stallsTable th:nth-child(1) { width: 10%; }
+.stall-monitoring-page #stallsTable th:nth-child(2) { width: 18%; }
+.stall-monitoring-page #stallsTable th:nth-child(3) { width: 12%; }
+.stall-monitoring-page #stallsTable th:nth-child(4) { width: 15%; }
+.stall-monitoring-page #stallsTable th:nth-child(5) { width: 15%; }
+.stall-monitoring-page #stallsTable th:nth-child(6) { width: 15%; }
+.stall-monitoring-page #stallsTable th:nth-child(7) { width: 15%; }
 
-/* Overdue Table Column Widths */
-.overdue-table th:nth-child(1) { width: 10%; }
-.overdue-table th:nth-child(2) { width: 15%; }
-.overdue-table th:nth-child(3) { width: 10%; }
-.overdue-table th:nth-child(4) { width: 12%; }
-.overdue-table th:nth-child(5) { width: 10%; }
-.overdue-table th:nth-child(6) { width: 11%; }
-.overdue-table th:nth-child(7) { width: 14%; }
-.overdue-table th:nth-child(8) { width: 18%; }
+.stall-monitoring-page .overdue-table th:nth-child(1) { width: 10%; }
+.stall-monitoring-page .overdue-table th:nth-child(2) { width: 15%; }
+.stall-monitoring-page .overdue-table th:nth-child(3) { width: 10%; }
+.stall-monitoring-page .overdue-table th:nth-child(4) { width: 12%; }
+.stall-monitoring-page .overdue-table th:nth-child(5) { width: 10%; }
+.stall-monitoring-page .overdue-table th:nth-child(6) { width: 11%; }
+.stall-monitoring-page .overdue-table th:nth-child(7) { width: 10%; }
+.stall-monitoring-page .overdue-table th:nth-child(8) { width: 12%; }
+.stall-monitoring-page .overdue-table th:nth-child(9) { width: 10%; }
 
-th {
-    background: #f8fafc; 
+.stall-monitoring-page .table-responsive th {
+    background: #f8fafc;
     color: #475569;
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
     padding: 16px 12px;
-    border-bottom: 2px solid #e2e8f0; 
+    border-bottom: 2px solid #e2e8f0;
     letter-spacing: 0.5px;
     text-align: center;
     white-space: nowrap;
 }
 
-td {
+.stall-monitoring-page .table-responsive td {
     padding: 16px 12px;
     border-bottom: 1px solid #f1f5f9;
     font-size: 14px;
@@ -219,52 +259,39 @@ td {
     vertical-align: middle;
     text-align: center;
     background: #ffffff;
+    overflow-wrap: break-word;
 }
 
-tbody tr:hover td {
+.stall-monitoring-page .table-responsive tbody tr:hover td {
     background-color: #f8fafc;
 }
 
-/* 🛑 THE FIX: Anchors the eye to the left, leaves space for the bell 🛑 */
-.action-buttons {
+/* =========================================
+   ACTION BUTTONS - FIXED GRID ALIGNMENT
+   ========================================= */
+
+.stall-monitoring-page .table-responsive td:last-child {
+    position: relative;
+    padding: 0 !important;
+}
+
+.stall-monitoring-page .action-buttons {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     display: flex;
-    justify-content: flex-start; /* Aligns buttons to the left */
     align-items: center;
+    justify-content: flex-start;
     gap: 8px;
-    /* 34px (eye) + 8px (gap) + 34px (bell) = 76px */
-    width: 76px; 
-    min-width: 76px;
-    /* Centers the 76px container inside the table cell */
-    margin: 0 auto; 
+    width: 76px; /* Fixed width: 34px + 8px + 34px */
 }
 
-.status-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border-radius: 20px; 
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.status-available { background: #f1f5f9; color: #475569; }
-.status-paid { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-.status-pending { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
-.status-overdue { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
-
-.sub-text {
-    font-size: 11px;
-    color: #94a3b8;
-    margin-top: 4px;
-    text-align: center;
-}
-
-.btn-action {
+.stall-monitoring-page .btn-action {
     width: 34px;
     height: 34px;
+    padding: 0;
+    box-sizing: border-box;
     border: 1px solid #cbd5e1;
     background: white;
     color: #64748b;
@@ -274,27 +301,104 @@ tbody tr:hover td {
     align-items: center;
     justify-content: center;
     margin: 0;
-    transition: all 0.15s;
     flex-shrink: 0;
+    transition: all 0.15s ease;
 }
 
-.btn-action:hover {
+.stall-monitoring-page .btn-action.is-hidden {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.stall-monitoring-page .btn-action:hover {
     background: #f1f5f9;
     color: #0f172a;
     border-color: #94a3b8;
 }
 
-.btn-action.reminder {
+.stall-monitoring-page .btn-action.reminder {
     color: #d97706;
     border-color: #fde68a;
     background: #fffbeb;
 }
 
-.btn-action.reminder:hover {
+.stall-monitoring-page .btn-action.reminder:hover {
     background: #fef3c7;
 }
 
-.modal-backdrop {
+.stall-monitoring-page .btn-action i { 
+    line-height: 1; 
+}
+
+/* =========================================
+   STATUS BADGES AND OTHER ELEMENTS
+   ========================================= */
+
+.stall-monitoring-page .status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.stall-monitoring-page .status-available { background: #f1f5f9; color: #475569; }
+.stall-monitoring-page .status-paid { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+.stall-monitoring-page .status-pending { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.stall-monitoring-page .status-overdue { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+.stall-monitoring-page .sub-text {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 4px;
+    text-align: center;
+}
+
+.stall-monitoring-page .empty-state {
+    text-align: center !important;
+    padding: 40px !important;
+    color: #94a3b8 !important;
+}
+
+/* Loading state */
+.stall-monitoring-page .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 0;
+}
+
+.stall-monitoring-page .loading-state p { margin-top: 16px; color: #64748b; font-size: 14px; }
+
+.stall-monitoring-page .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e2e8f0;
+    border-top: 4px solid #3b82f6;
+    border-radius: 50%;
+    animation: stall-monitoring-spin 1s linear infinite;
+}
+
+@keyframes stall-monitoring-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Overdue accounts */
+.stall-monitoring-page .overdue-panel { margin-top: 24px; }
+.stall-monitoring-page .overdue-header { border-bottom: 1px solid #e2e8f0; }
+.stall-monitoring-page .overdue-header h2 { color: #dc2626; display: flex; align-items: center; gap: 8px; }
+.stall-monitoring-page .overdue-stall-number, 
+.stall-monitoring-page .penalty-amount, 
+.stall-monitoring-page .total-due { color: #dc2626; }
+
+/* Existing modal styles */
+.stall-monitoring-page .modal-backdrop {
     position: fixed;
     inset: 0;
     background: rgba(15, 23, 42, 0.4);
@@ -304,11 +408,9 @@ tbody tr:hover td {
     z-index: 9999;
 }
 
-.modal-backdrop.active {
-    display: flex;
-}
+.stall-monitoring-page .modal-backdrop.active { display: flex; }
 
-.modal-box {
+.stall-monitoring-page .modal-box {
     background: white;
     width: 100%;
     max-width: 400px;
@@ -317,7 +419,7 @@ tbody tr:hover td {
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
 }
 
-.modal-icon {
+.stall-monitoring-page .modal-icon {
     width: 40px;
     height: 40px;
     border-radius: 4px;
@@ -327,24 +429,13 @@ tbody tr:hover td {
     margin-bottom: 16px;
 }
 
-.info-icon { background: #eff6ff; color: #2563eb; }
-.danger-icon { background: #fef2f2; color: #dc2626; }
+.stall-monitoring-page .info-icon { background: #eff6ff; color: #2563eb; }
+.stall-monitoring-page .danger-icon { background: #fef2f2; color: #dc2626; }
 
-.modal-box h3 {
-    font-size: 16px;
-    font-weight: 600;
-    color: #0f172a;
-    margin-bottom: 8px;
-}
+.stall-monitoring-page .modal-box h3 { font-size: 16px; font-weight: 600; color: #0f172a; margin-bottom: 8px; }
+.stall-monitoring-page .modal-box p { font-size: 13px; color: #64748b; margin-bottom: 16px; line-height: 1.5; }
 
-.modal-box p {
-    font-size: 13px;
-    color: #64748b;
-    margin-bottom: 16px;
-    line-height: 1.5;
-}
-
-.modal-details {
+.stall-monitoring-page .modal-details {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     padding: 12px;
@@ -355,23 +446,15 @@ tbody tr:hover td {
     line-height: 1.5;
 }
 
-.modal-details div {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 8px;
-}
-.modal-details div:last-child {
-    margin-bottom: 0;
-}
+.stall-monitoring-page .modal-details div { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.stall-monitoring-page .modal-details div:last-child { margin-bottom: 0; }
 
-.modal-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
+.stall-monitoring-page .modal-actions { display: flex; flex-direction: column; gap: 12px; }
 
-.modal-actions button, .modal-actions a {
+.stall-monitoring-page .modal-actions button, 
+.stall-monitoring-page .modal-actions a {
     width: 100%;
+    box-sizing: border-box;
     border: none;
     padding: 12px;
     border-radius: 6px;
@@ -385,56 +468,31 @@ tbody tr:hover td {
     gap: 8px;
 }
 
-.btn-cancel {
-    background: white;
-    border: 1px solid #cbd5e1;
-    color: #475569;
-}
-.btn-cancel:hover {
-    background: #f1f5f9;
-}
+.stall-monitoring-page .btn-cancel { background: white; border: 1px solid #cbd5e1; color: #475569; }
+.stall-monitoring-page .btn-cancel:hover { background: #f1f5f9; }
+.stall-monitoring-page .btn-danger { background: #dc2626; color: white; }
+.stall-monitoring-page .btn-danger:hover { background: #b91c1c; }
 
-.btn-danger {
-    background: #dc2626;
-    color: white;
-}
-.btn-danger:hover {
-    background: #b91c1c;
-}
-
+/* Responsive layout */
 @media (max-width: 1024px) {
-    .metric-row {
-        grid-template-columns: repeat(2, 1fr);
-    }
+    .stall-monitoring-page .metric-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 768px) {
-    .page-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 16px;
-    }
-    .header-tools {
-        width: 100%;
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .input-with-icon input {
-        width: 100%;
-    }
-    .data-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 12px;
-    }
-    .filters {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        width: 100%;
-    }
-    .filters select {
-        margin-left: 0;
-        width: 100%;
-    }
+    .stall-monitoring-page .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .stall-monitoring-page .header-tools { width: 100%; flex-direction: column; align-items: stretch; }
+    .stall-monitoring-page .input-with-icon { width: 100%; }
+    .stall-monitoring-page .input-with-icon input { width: 100%; }
+    .stall-monitoring-page .header-tools .btn-secondary { width: 100%; }
+    .stall-monitoring-page .data-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .stall-monitoring-page .filters { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+    .stall-monitoring-page .filters select { margin-left: 0; width: 100%; }
+    .stall-monitoring-page .table-responsive table { min-width: 850px; }
+    .stall-monitoring-page .overdue-table { min-width: 1100px; }
+}
+
+@media (max-width: 480px) {
+    .stall-monitoring-page .metric-row { grid-template-columns: 1fr; gap: 12px; }
+    .stall-monitoring-page .metric-box { padding: 16px; }
+    .stall-monitoring-page .data-header { padding: 16px; }
 }

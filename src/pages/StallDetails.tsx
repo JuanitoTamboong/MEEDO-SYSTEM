@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react'; // Added React import
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase/lib/supabase';
 import { recordAuditLog } from '../supabase/lib/audit';
@@ -578,8 +578,8 @@ export default function StallDetails() {
                   );
 
                   return (
-                    <>
-                      <tr key={key} style={{ cursor: group.ids.length > 1 ? 'pointer' : 'default' }} onClick={() => group.ids.length > 1 && toggleReceiptExpand(key)}>
+                    <React.Fragment key={key}>
+                      <tr style={{ cursor: group.ids.length > 1 ? 'pointer' : 'default' }} onClick={() => group.ids.length > 1 && toggleReceiptExpand(key)}>
                         <td>{group.payment_date ? new Date(group.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
                         <td>₱{Number(group.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         <td>{group.receipt_number || '—'}</td>
@@ -636,7 +636,7 @@ export default function StallDetails() {
                       </tr>
 
                       {isExpanded && group.ids.length > 1 && (
-                        group.ids.map((id: number, idx: number) => {
+                        group.ids.map((id: number) => {
                           const p = paymentHistory.find((x: any) => x.id === id);
                           if (!p) return null;
                           return (
@@ -672,7 +672,7 @@ export default function StallDetails() {
                           );
                         })
                       )}
-                    </>
+                    </React.Fragment>
                   );
                 })}
               </tbody>

@@ -1,5 +1,8 @@
+/* ============================================================
+   CONTRACTS PAGE STYLES
+   ============================================================ */
 
-
+/* 1. Main Container & Table Wrapper */
 .data-panel {
     width: 100%;
     min-width: 0;
@@ -8,6 +11,7 @@
     border-radius: 9px;
     background: #ffffff;
     box-shadow: 0 2px 8px rgba(15, 40, 25, 0.06);
+    margin-bottom: 24px;
 }
 
 .data-panel .table-responsive {
@@ -21,18 +25,24 @@
     scrollbar-width: thin;
 }
 
+/* Base table styles (applies to ALL tables) */
 .data-panel .table-responsive > table {
     width: 100% !important;
-    min-width: 1050px !important;
     table-layout: auto !important;
     border-collapse: collapse !important;
     border-spacing: 0;
     margin: 0;
 }
 
+/* Force ONLY the Contract Directory table to be wider for the action buttons */
+.data-panel .table-responsive > table.contract-directory-table {
+    min-width: 1300px !important; 
+    table-layout: fixed !important;
+}
+
 .data-panel .table-responsive > table th,
 .data-panel .table-responsive > table td {
-    padding: 12px 16px !important;
+    padding: 14px 16px !important;
     white-space: nowrap !important;
     vertical-align: middle;
 }
@@ -74,6 +84,16 @@
     font-size: 12px;
 }
 
+/* ============================================================
+   COLUMN WIDTH ALLOCATIONS (Only for Contract Directory)
+   ============================================================ */
+   
+.contract-directory-table th:nth-child(1), .contract-directory-table td:nth-child(1) { width: 22%; }
+.contract-directory-table th:nth-child(2), .contract-directory-table td:nth-child(2) { width: 10%; }
+.contract-directory-table th:nth-child(3), .contract-directory-table td:nth-child(3) { width: 22%; }
+.contract-directory-table th:nth-child(4), .contract-directory-table td:nth-child(4) { width: 16%; }
+.contract-directory-table th:nth-child(5), .contract-directory-table td:nth-child(5) { width: 10%; text-align: center; }
+.contract-directory-table th:nth-child(6), .contract-directory-table td:nth-child(6) { width: 20%; min-width: 380px; }
 
 /* ============================================================
    2. TENANT INFORMATION
@@ -92,7 +112,6 @@
     font-weight: 400;
 }
 
-
 /* ============================================================
    3. STALL BADGE
    ============================================================ */
@@ -101,18 +120,14 @@
     display: inline-block;
     min-width: 40px;
     padding: 5px 9px;
-
     border: 1px solid #d5e4d9;
     border-radius: 4px;
-
     background: #edf5ef;
     color: #217346;
-
     font-size: 11px;
     font-weight: 700;
     text-align: center;
 }
-
 
 /* ============================================================
    4. CONTRACT DATE RANGE
@@ -122,7 +137,6 @@
     display: flex;
     align-items: center;
     gap: 8px;
-
     color: #46564b;
     font-size: 11px;
     white-space: nowrap;
@@ -132,7 +146,6 @@
     color: #8b9a90;
     font-size: 10px;
 }
-
 
 /* ============================================================
    5. FINANCIAL INFORMATION
@@ -166,29 +179,18 @@
     white-space: nowrap;
 }
 
-.text-green {
-    color: #16834a !important;
-}
-
-.text-red {
-    color: #dc2626 !important;
-}
-
-.text-muted {
-    color: #8b9690;
-    font-size: 11px;
-}
-
+.text-green { color: #16834a !important; }
+.text-red { color: #dc2626 !important; }
+.text-muted { color: #8b9690; font-size: 11px; }
 
 /* ============================================================
    6. CONTRACT ACTION BUTTONS
    ============================================================ */
 
 .action-buttons {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    justify-content: flex-start;
-    gap: 5px;
+    gap: 6px;
     flex-wrap: nowrap !important;
     white-space: nowrap;
 }
@@ -198,27 +200,19 @@
     align-items: center;
     justify-content: center;
     gap: 5px;
-
-    min-height: 30px;
-    padding: 6px 10px;
-
+    min-height: 32px;
+    padding: 6px 12px;
     border: 1px solid #d6dfd8;
     border-radius: 4px;
-
     background: #ffffff;
     color: #46564b;
-
     font-family: inherit;
     font-size: 11px;
     font-weight: 600;
-
     cursor: pointer;
     white-space: nowrap !important;
-
-    transition:
-        background 0.15s ease,
-        border-color 0.15s ease,
-        transform 0.15s ease;
+    flex-shrink: 0; /* Prevents buttons from being squished */
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .action-buttons button:hover {
@@ -227,416 +221,210 @@
     transform: translateY(-1px);
 }
 
-.action-buttons button:active {
-    transform: translateY(0);
-}
+.action-buttons button:active { transform: translateY(0); }
 
-/* Extend button */
-.action-buttons .btn-extend {
-    border-color: #b8d9c1;
-    background: #eaf5ed;
-    color: #217346;
-}
+.action-buttons .btn-extend { border-color: #b8d9c1; background: #eaf5ed; color: #217346; }
+.action-buttons .btn-extend:hover { background: #d7ebdd; border-color: #8eb99a; }
 
-.action-buttons .btn-extend:hover {
-    background: #d7ebdd;
-    border-color: #8eb99a;
-}
+.action-buttons .btn-pay-balance { border-color: #b9d9cb; background: #e8f6ef; color: #087443; }
+.action-buttons .btn-pay-balance:hover { background: #d5eddf; border-color: #8ec4a7; }
 
-/* Pay balance button */
-.action-buttons .btn-pay-balance {
-    border-color: #b9d9cb;
-    background: #e8f6ef;
-    color: #087443;
-}
-
-.action-buttons .btn-pay-balance:hover {
-    background: #d5eddf;
-    border-color: #8ec4a7;
-}
-
-/* Icon-only buttons */
 .action-buttons .btn-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-
-    width: 30px;
-    min-width: 30px;
-    height: 30px;
-    min-height: 30px;
-
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
     padding: 0;
     font-size: 12px;
 }
 
-/* Danger button */
-.action-buttons .btn-icon.danger {
-    border-color: #f2cccc;
-    color: #dc2626;
-}
-
-.action-buttons .btn-icon.danger:hover {
-    background: #fff0f0;
-    border-color: #dc2626;
-}
-
+.action-buttons .btn-icon.danger { border-color: #f2cccc; color: #dc2626; }
+.action-buttons .btn-icon.danger:hover { background: #fff0f0; border-color: #dc2626; }
 
 /* ============================================================
-   7. PAYMENT HISTORY MODAL BACKDROP
+   7. MODALS & PAYMENT HISTORY
    ============================================================ */
 
-.modal-backdrop:has(.modal-box .table-responsive table) {
-    position: fixed;
-    inset: 0;
-    z-index: 99999;
-
+.modal-backdrop {
+    position: fixed !important;
+    top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+    z-index: 99999 !important;
     display: none;
     align-items: center;
     justify-content: center;
-
-    width: 100%;
-    height: 100%;
     padding: 20px;
-
-    overflow-y: auto;
-
     background: rgba(17, 30, 22, 0.55);
     backdrop-filter: blur(4px);
 }
 
-.modal-backdrop.active:has(.modal-box .table-responsive table) {
-    display: flex;
-}
+.modal-backdrop.active { display: flex !important; }
 
-
-/* ============================================================
-   8. PAYMENT HISTORY MODAL CONTAINER
-   ============================================================ */
-
-.modal-box:has(.table-responsive table) {
+.modal-box {
     position: relative;
-
     display: flex;
     flex-direction: column;
-
-    width: min(1100px, calc(100vw - 40px)) !important;
+    width: 100% !important;
     max-width: 1100px !important;
-
-    height: auto;
     max-height: calc(100vh - 40px) !important;
-
-    min-width: 0;
     margin: auto !important;
     padding: 28px !important;
-
     overflow: hidden !important;
-
     border: 1px solid #d5dfd8;
     border-radius: 10px;
-
     background: #ffffff;
     box-shadow: 0 15px 50px rgba(0, 0, 0, 0.18);
 }
 
-/* Modal title */
-.modal-box:has(.table-responsive table) h3 {
+.modal-box h3 {
     flex-shrink: 0;
     margin: 0 0 8px;
-
     color: #263b2e;
     font-size: 21px;
     font-weight: 700;
 }
 
-/* Modal description */
-.modal-box:has(.table-responsive table) > p {
+.modal-box > p {
     flex-shrink: 0;
     margin: 0 0 15px;
-
     color: #718078;
     font-size: 12px;
     line-height: 1.6;
 }
 
-
 /* ============================================================
-   9. PAYMENT HISTORY TABLE SCROLL CONTAINER
+   8. PAYMENT HISTORY TABLE (Inside Modal)
    ============================================================ */
 
-.modal-box:has(.table-responsive table) .table-responsive {
+/* Note: These tables are NOT inside .data-panel, so they are free to shrink */
+.modal-box .table-responsive {
     display: block;
-
     flex: 0 1 auto;
     min-width: 0;
     width: 100% !important;
     max-width: 100% !important;
-
     max-height: 440px;
     min-height: 120px;
-
     margin-top: 10px;
-
     overflow-x: auto !important;
     overflow-y: auto !important;
-
     border: 1px solid #cbd9cf;
     border-radius: 7px;
-
     background: #ffffff;
-
     scrollbar-width: thin;
     scrollbar-color: #b8cabe #edf1ee;
 }
 
-
-/* ============================================================
-   10. PAYMENT HISTORY SPREADSHEET TABLE
-   ============================================================ */
-
-.modal-box:has(.table-responsive table) .table-responsive table {
+.modal-box .table-responsive table {
     width: 100% !important;
-    min-width: 1020px !important;
-
+    min-width: 1020px !important; /* Still needs width for the 7 columns */
     margin: 0;
-
     table-layout: fixed !important;
     border-collapse: collapse !important;
     border-spacing: 0;
 }
 
-/* Sticky table header */
-.modal-box:has(.table-responsive table) .table-responsive thead {
+.modal-box .table-responsive thead {
     position: sticky;
     top: 0;
     z-index: 5;
 }
 
-.modal-box:has(.table-responsive table) .table-responsive th {
+.modal-box .table-responsive th {
     padding: 13px 12px;
-
     border: 1px solid #d5dfd8;
     border-bottom: 2px solid #217346;
-
     background: #eaf1ec;
     color: #31533d;
-
     font-size: 11px;
     font-weight: 700;
     text-align: left;
     text-transform: uppercase;
     letter-spacing: 0.3px;
-
     white-space: nowrap;
 }
 
-/* Table cells */
-.modal-box:has(.table-responsive table) .table-responsive td {
+.modal-box .table-responsive td {
     padding: 12px;
-
     border: 1px solid #e2e8e3;
-
     color: #34443a;
     font-size: 12px;
-
     vertical-align: middle;
     white-space: nowrap;
-
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-/* Alternating row colors */
-.modal-box:has(.table-responsive table) .table-responsive tbody tr {
-    background: #ffffff;
-    transition: background 0.15s ease;
-}
+.modal-box .table-responsive tbody tr { background: #ffffff; transition: background 0.15s ease; }
+.modal-box .table-responsive tbody tr:nth-child(even) { background: #f8faf9; }
+.modal-box .table-responsive tbody tr:hover { background: #edf6ef; }
 
-.modal-box:has(.table-responsive table) .table-responsive tbody tr:nth-child(even) {
-    background: #f8faf9;
-}
-
-.modal-box:has(.table-responsive table) .table-responsive tbody tr:hover {
-    background: #edf6ef;
-}
-
-
-/* ============================================================
-   11. PAYMENT HISTORY COLUMN WIDTHS
-   Seven-column layout
-   ============================================================ */
-
-.modal-box:has(.table-responsive table) .table-responsive th:nth-child(1),
-.modal-box:has(.table-responsive table) .table-responsive td:nth-child(1) {
-    width: 155px;
-    min-width: 155px;
-}
-
-.modal-box:has(.table-responsive table) .table-responsive th:nth-child(2),
-.modal-box:has(.table-responsive table) .table-responsive td:nth-child(2) {
-    width: 190px;
-    min-width: 190px;
-}
-
-.modal-box:has(.table-responsive table) .table-responsive th:nth-child(3),
-.modal-box:has(.table-responsive table) .table-responsive td:nth-child(3) {
-    width: 145px;
-    min-width: 145px;
-}
-
-.modal-box:has(.table-responsive table) .table-responsive th:nth-child(4),
-.modal-box:has(.table-responsive table) .table-responsive td:nth-child(4) {
-    width: 125px;
-    min-width: 125px;
-}
-
-.modal-box:has(.table-responsive table) .table-responsive th:nth-child(5),
-.modal-box:has(.table-responsive table) .table-responsive td:nth-child(5) {
-    width: 170px;
-    min-width: 170px;
-}
-
-.modal-box:has(.table-responsive table) .table-responsive th:nth-child(6),
-.modal-box:has(.table-responsive table) .table-responsive td:nth-child(6) {
-    width: 130px;
-    min-width: 130px;
-    text-align: center;
-}
-
-.modal-box:has(.table-responsive table) .table-responsive th:nth-child(7),
-.modal-box:has(.table-responsive table) .table-responsive td:nth-child(7) {
-    width: 105px;
-    min-width: 105px;
-    text-align: center;
-}
-
-
-/* ============================================================
-   12. PAYMENT HISTORY PRINT BUTTON
-   ============================================================ */
-
-.modal-box:has(.table-responsive table) .btn-action {
+/* Print Button inside Modal */
+.modal-box .btn-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-
     width: 38px;
     min-width: 38px;
     height: 36px;
-
     padding: 0;
-
     border: 1px solid #c8dfce;
     border-radius: 5px;
-
     background: #edf6ef;
     color: #217346 !important;
-
     font-size: 15px;
     cursor: pointer;
-
     transition: 0.2s ease;
 }
 
-.modal-box:has(.table-responsive table) .btn-action:hover {
+.modal-box .btn-action:hover {
     border-color: #217346;
     background: #dceee1;
     transform: translateY(-1px);
 }
 
-
-/* ============================================================
-   13. PAYMENT HISTORY MODAL ACTIONS
-   ============================================================ */
-
-.modal-box:has(.table-responsive table) .modal-actions {
+.modal-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     flex-shrink: 0;
-
     gap: 9px;
     margin-top: 18px;
 }
 
-
 /* ============================================================
-   14. CONTRACT RESPONSIVE DESIGN
+   9. RESPONSIVE DESIGN
    ============================================================ */
 
-@media (max-width: 992px) {
-    .data-panel .table-responsive > table {
-        min-width: 1050px !important;
-    }
-
-    .modal-box:has(.table-responsive table) {
-        width: calc(100vw - 32px) !important;
-        max-width: 1000px !important;
+@media (max-width: 1400px) {
+    /* Only the main directory table stays wide */
+    .data-panel .table-responsive > table.contract-directory-table {
+        min-width: 1300px !important;
     }
 }
 
 @media (max-width: 768px) {
-
-    /* Directory */
-    .data-panel {
-        width: 100%;
-        min-width: 0;
-    }
-
-    .data-panel .table-responsive {
-        overflow-x: auto !important;
-    }
-
-    .data-panel .table-responsive > table {
-        min-width: 1050px !important;
-    }
-
-    /* Payment modal backdrop */
-    .modal-backdrop:has(.modal-box .table-responsive table) {
-        padding: 12px;
-    }
-
-    /* Payment modal */
-    .modal-box:has(.table-responsive table) {
+    .modal-backdrop { padding: 12px; }
+    .modal-box {
         width: calc(100vw - 24px) !important;
         max-width: none !important;
-
         max-height: calc(100vh - 24px) !important;
-
         padding: 18px !important;
     }
-
-    .modal-box:has(.table-responsive table) h3 {
-        font-size: 18px;
-    }
-
-    .modal-box:has(.table-responsive table) .table-responsive {
-        max-height: 55vh;
-    }
-
-    .modal-box:has(.table-responsive table) .modal-actions {
-        flex-wrap: wrap;
-    }
+    .modal-box h3 { font-size: 18px; }
+    .modal-box .table-responsive { max-height: 55vh; }
+    .modal-actions { flex-wrap: wrap; }
 }
 
 @media (max-width: 480px) {
-
-    .modal-backdrop:has(.modal-box .table-responsive table) {
-        padding: 8px;
-    }
-
-    .modal-box:has(.table-responsive table) {
+    .modal-backdrop { padding: 8px; }
+    .modal-box {
         width: calc(100vw - 16px) !important;
         max-height: calc(100vh - 16px) !important;
-
         padding: 14px !important;
     }
-
-    .modal-box:has(.table-responsive table) h3 {
-        font-size: 17px;
-    }
-
-    .modal-box:has(.table-responsive table) .table-responsive {
-        max-height: 50vh;
-    }
+    .modal-box h3 { font-size: 17px; }
+    .modal-box .table-responsive { max-height: 50vh; }
 }
