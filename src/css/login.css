@@ -1,13 +1,37 @@
 /* src/pages/login.css */
 
+/* Force the body to be full height and dark so no white bars show */
+body:has(.login-page-container) {
+    background-color: #0f172a !important; /* Dark background to match the overlay */
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Make sure the root wrappers don't add padding */
+body:has(.login-page-container) #root,
+body:has(.login-page-container) .dashboard-body,
+body:has(.login-page-container) .main-content {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    display: block !important;
+}
+
+/* The main container */
 .login-page-container {
     background: url("../assets/images/meedo-bg.jpg") center center/cover no-repeat;
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
-    width: 100%;
-    position: relative;
+    height: 100vh;
+    width: 100vw;
+    position: fixed; /* Fixed prevents scrolling issues on mobile */
+    top: 0;
+    left: 0;
+    z-index: 9999;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -18,10 +42,10 @@
 }
 
 .overlay {
-    position: fixed;
+    position: absolute;
     inset: 0;
     background: rgba(15, 23, 42, 0.75);
-    backdrop-filter: blur(6px);
+    backdrop-filter: blur(8px);
     z-index: 1;
 }
 
@@ -33,18 +57,18 @@
     align-items: center;
     width: 100%;
     height: 100%;
-    padding: 20px;
+    padding: 24px;
+    overflow-y: auto;
 }
 
 .login-container {
     width: 100%;
-    max-width: 380px;
+    max-width: 440px;
     background: #ffffff;
-    border-radius: 12px;
+    border-radius: 16px;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    overflow: hidden;
     animation: slideUpFade 0.5s ease-out;
-    flex-shrink: 0;
+    position: relative;
 }
 
 @keyframes slideUpFade {
@@ -54,14 +78,16 @@
 
 .login-header {
     background: #f8fafc;
-    padding: 28px 24px 20px;
+    padding: 32px 32px 24px;
     text-align: center;
     border-bottom: 1px solid #e2e8f0;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
 }
 
 .logo {
-    width: 64px;
-    height: 64px;
+    width: 72px;
+    height: 72px;
     margin: 0 auto 16px;
     background: white;
     border-radius: 50%;
@@ -78,60 +104,62 @@
 }
 
 .login-header h2 {
-    font-size: 18px;
-    font-weight: 700;
+    font-size: 22px;
+    font-weight: 800;
     color: #0f172a;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
 }
 
 .login-header p {
-    font-size: 12px;
+    font-size: 13px;
     color: #64748b;
     font-weight: 500;
 }
 
 .login-form {
-    padding: 24px;
+    padding: 32px;
 }
 
 .form-group {
-    margin-bottom: 16px;
+    margin-bottom: 22px;
 }
 
 .form-group label {
     display: block;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
-    color: #475569;
-    margin-bottom: 6px;
+    color: #334155;
+    margin-bottom: 8px;
 }
 
 .input-box {
     display: flex;
     align-items: center;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 8px;
     background: #f8fafc;
     transition: all 0.2s;
-    height: 40px;
+    height: 48px;
+    position: relative;
 }
 
 .input-box:focus-within {
     background: #ffffff;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    border-color: #2563eb;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
 
 .input-box i {
-    width: 40px;
+    width: 48px;
     text-align: center;
     color: #94a3b8;
-    font-size: 14px;
+    font-size: 16px;
     transition: color 0.2s;
 }
 
 .input-box:focus-within i {
-    color: #3b82f6;
+    color: #2563eb;
 }
 
 .input-box input,
@@ -140,15 +168,29 @@
     border: none;
     outline: none;
     background: transparent;
-    font-size: 13px;
+    font-size: 14px;
     color: #0f172a;
     height: 100%;
-    padding-right: 12px;
+    padding-left: 12px;
+    padding-right: 16px;
     appearance: none;
+    cursor: pointer;
 }
 
+/* Custom Caret for Select */
 .input-box select {
-    cursor: pointer;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748B%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px top 50%;
+    background-size: 11px auto;
+    padding-right: 38px;
+}
+
+.input-box select option {
+    padding: 12px 16px; 
+    font-size: 14px;
+    color: #0f172a;
+    background: #ffffff;
 }
 
 .input-box input::placeholder {
@@ -156,7 +198,7 @@
 }
 
 #togglePassword {
-    width: 36px;
+    width: 44px;
     cursor: pointer;
     color: #94a3b8;
 }
@@ -169,35 +211,35 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
 }
 
 .checkbox-container {
     display: flex;
     align-items: center;
-    font-size: 12px;
+    font-size: 13px;
     color: #475569;
     cursor: pointer;
     user-select: none;
 }
 
 .checkbox-container input {
-    margin-right: 6px;
-    width: 14px;
-    height: 14px;
+    margin-right: 8px;
+    width: 16px;
+    height: 16px;
     cursor: pointer;
     accent-color: #2563eb;
 }
 
 .btn-login {
     width: 100%;
-    height: 40px;
+    height: 48px;
     background: #2563eb;
     color: white;
     border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 600;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -209,7 +251,7 @@
 
 .btn-login:hover {
     background: #1d4ed8;
-    box-shadow: 0 6px 10px -1px rgba(37, 99, 235, 0.3);
+    box-shadow: 0 6px 12px -1px rgba(37, 99, 235, 0.3);
 }
 
 .btn-login:active {
@@ -218,47 +260,30 @@
 
 .login-footer {
     background: #f8fafc;
-    padding: 12px;
+    padding: 18px;
     text-align: center;
     border-top: 1px solid #e2e8f0;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
 }
 
 .login-footer p {
-    font-size: 11px;
+    font-size: 12px;
     color: #94a3b8;
 }
 
-/* =========================================
-   RESPONSIVE & MOBILE FIXES
-   ========================================= */
-
-@media (max-width: 768px) {
-    body:has(.login-page-container)::before {
-        display: none !important;
-    }
-
-    body:has(.login-page-container) .main-content {
-        padding-top: 0 !important;
-    }
-}
-
+/* Mobile Adjustments */
 @media (max-width: 480px) {
-    .login-page-container {
-        align-items: flex-start;
-        padding: 20px 0;
-    }
-
     .login-wrapper {
-        align-items: flex-start;
-        height: auto;
-        min-height: 100%;
+        padding: 16px;
+        align-items: center; /* Keeps it centered on mobile */
     }
 
     .login-header {
-        padding: 16px 20px 12px;
+        padding: 24px 20px 16px;
     }
 
     .login-form {
-        padding: 20px;
+        padding: 24px 20px;
     }
 }

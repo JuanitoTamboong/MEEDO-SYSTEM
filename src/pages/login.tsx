@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import '../css/login.css'; 
 import logo from '../assets/images/meedo-logo.png'; 
 
-// Import your Supabase client and the custom popup
 import { supabase } from '../supabase/lib/supabase';
-import { recordAuditLog } from '../supabase/lib/audit'; // <-- ADDED THIS IMPORT
+import { recordAuditLog } from '../supabase/lib/audit';
 import LoginErrorPopup from '../components/LoginErrorPopup'; 
 
 export default function Login() {
@@ -44,7 +43,6 @@ export default function Login() {
            return;
         }
 
-        // ---> ADDED THIS LINE RIGHT HERE <---
         await recordAuditLog('Login', `User signed in successfully as ${actualRole}`);
 
         navigate('/dashboard'); 

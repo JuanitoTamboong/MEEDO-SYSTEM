@@ -225,12 +225,17 @@ tbody tr:hover td {
     background-color: #f8fafc;
 }
 
+/* 🛑 THE FIX: Anchors the eye to the left, leaves space for the bell 🛑 */
 .action-buttons {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start; /* Aligns buttons to the left */
     align-items: center;
     gap: 8px;
-    margin: 0 auto;
+    /* 34px (eye) + 8px (gap) + 34px (bell) = 76px */
+    width: 76px; 
+    min-width: 76px;
+    /* Centers the 76px container inside the table cell */
+    margin: 0 auto; 
 }
 
 .status-badge {
@@ -265,7 +270,7 @@ tbody tr:hover td {
     color: #64748b;
     border-radius: 6px;
     cursor: pointer;
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
     margin: 0;
