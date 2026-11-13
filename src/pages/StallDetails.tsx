@@ -433,9 +433,13 @@ export default function StallDetails() {
             <div className="info-row">
               <span className="info-label">Payment Covers</span>
               <span className="info-value">
-                {currentPayment?.month_covered
-                  ? new Date(String(currentPayment.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-                  : new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                {unpaidBills.length > 1 
+                  ? `Multiple Months (${unpaidBills.length})`
+                  : (unpaidBills.length === 1 
+                    ? new Date(String(unpaidBills[0].month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                    : (currentPayment?.month_covered
+                      ? new Date(String(currentPayment.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                      : new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })))}
               </span>
             </div>
 
@@ -450,7 +454,9 @@ export default function StallDetails() {
                 <div className="info-row">
                   <span className="info-label">Next Due Date</span>
                   <span className="info-value">
-                    {new Date(currentPayment.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {unpaidBills.length > 0 
+                      ? new Date(unpaidBills[0].due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      : new Date(currentPayment.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </span>
                 </div>
                 {currentPayment.payment_date && (
@@ -502,6 +508,48 @@ export default function StallDetails() {
               <div className="info-row"><span className="info-label">Address</span><span className="info-value">{[tenant.street, tenant.barangay, tenant.city].filter(Boolean).join(', ') || '—'}</span></div>
               <div className="info-row"><span className="info-label">Status</span><span className="info-value"><span className={`status-badge ${tenant.status}`}>{tenant.status}</span></span></div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🛑 NEW: Outstanding Balances Table (Clean Design) */}
+      {unpaidBills.length > 0 && (
+        <div className="data-panel" style={{ marginBottom: '24px' }}>
+          <div className="data-header">
+            <h2><i className="fa-solid fa-circle-exclamation" style={{ marginRight: '8px', color: '#dc2626' }}></i>Unpaid Balances</h2>
+            <span className="badge-count" style={{ background: '#fef2f2', color: '#dc2626', borderColor: '#fecaca' }}>
+              Total: ₱{totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Month Covered</th>
+                  <th>Due Date</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Penalty</th>
+                  <th>Total Due</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unpaidBills.map(bill => (
+                  <tr key={bill.id}>
+                    <td><strong>{new Date(String(bill.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong></td>
+                    <td>{new Date(bill.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                    <td>₱{Number(bill.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td>
+                      <span className={`status-badge ${bill.status.toLowerCase()}`}>{bill.status}</span>
+                    </td>
+                    <td style={{ color: bill.penalty > 0 ? '#dc2626' : 'inherit' }}>
+                      {bill.penalty > 0 ? `+ ₱${Number(bill.penalty).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
+                    </td>
+                    <td><strong style={{ color: '#dc2626' }}>₱{Number(bill.total_due).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

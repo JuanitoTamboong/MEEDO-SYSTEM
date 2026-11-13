@@ -66,7 +66,6 @@ export default function Contracts() {
 
           let validPayments = [];
           if (startDate && endDateStr) {
-            // Compare by Month strings (YYYY-MM) instead of Date objects to prevent timezone drops
             const startMonth = startDate.slice(0, 7); 
             const endMonth = endDateStr.slice(0, 7);
 
@@ -80,7 +79,6 @@ export default function Contracts() {
             validPayments = stallPayments;
           }
 
-          // Calculate totals
           const paidTotal = validPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
           const remainingTotal = validPayments.filter(p => p.status !== 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
 
@@ -128,7 +126,6 @@ export default function Contracts() {
       .eq('stall_id', contract.stall_id)
       .order('month_covered', { ascending: true });
 
-    // Filter to this contract's period only
     const start = contract.start_date ? contract.start_date.slice(0, 7) : null;
     const end = contract.end_date ? contract.end_date.slice(0, 7) : null;
 
@@ -187,24 +184,31 @@ export default function Contracts() {
         }]);
       }
 
-      const regDate = new Date(selectedContract.registration_date || selectedContract.start_date || new Date());
-      const fixedDay = regDate.getDate();
+      // Extract exact day (e.g., 13) from the date string to prevent timezone shifts
+      const dateString = selectedContract.registration_date || selectedContract.start_date || new Date().toISOString().split('T')[0];
+      const fixedDay = parseInt(dateString.split('-')[2], 10);
 
       let current = new Date(selectedContract.start_date || new Date());
+      current.setDate(1); // Snap to the 1st of the month to loop safely
       current.setHours(0, 0, 0, 0);
 
       const end = new Date(newEndDate);
       const newPayments = [];
       const generatedMonths = new Set();
 
-      while (current < end) {
+      while (current <= end) {
         const year = current.getFullYear();
         const month = String(current.getMonth() + 1).padStart(2, '0');
-        const day = String(fixedDay).padStart(2, '0');
         const monthCovered = `${year}-${month}-01`;
         const monthKey = `${year}-${month}`;
 
         if (!generatedMonths.has(monthKey)) {
+          // Cap the day to the last day of the month (e.g., Feb 28 instead of Feb 30)
+          const daysInMonth = new Date(year, current.getMonth() + 1, 0).getDate();
+          const actualDay = Math.min(fixedDay, daysInMonth);
+          const day = String(actualDay).padStart(2, '0');
+          
+          // The due date is IN the same month it covers
           const dueDateStr = `${year}-${month}-${day}`;
 
           newPayments.push({
@@ -233,7 +237,6 @@ export default function Contracts() {
       if (payAll && newPayments.length > 0) {
         const todayStr = new Date().toISOString().split('T')[0];
         const monthsToPay = newPayments.map(p => p.month_covered);
-        // One shared receipt number for the whole batch
         const sharedReceipt = `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 100000)}`;
 
         await supabase.from('payments')
@@ -544,7 +547,7 @@ export default function Contracts() {
           <div className="metric-data"><div className="metric-label">Expired</div><div className="metric-value">{expiredCount}</div></div>
         </div>
         
-        {/* NEW: Total Paid Card */}
+        {/* Total Paid Card */}
         <div className="metric-box">
           <div className="metric-icon" style={{ background: '#ecfdf5', color: '#059669' }}><i className="fa-solid fa-wallet"></i></div>
           <div className="metric-data">
@@ -553,7 +556,7 @@ export default function Contracts() {
           </div>
         </div>
 
-        {/* RENAMED: Total Balance Card */}
+        {/* Total Balance Card */}
         <div className="metric-box">
           <div className="metric-icon orange"><i className="fa-solid fa-scale-balanced"></i></div>
           <div className="metric-data">
@@ -834,6 +837,7 @@ export default function Contracts() {
                 <thead>
                   <tr>
                     <th>Month Covered</th>
+                    <th>Coverage Period</th>
                     <th>Due Date</th>
                     <th>Amount</th>
                     <th>Receipt #</th>
@@ -843,42 +847,67 @@ export default function Contracts() {
                 </thead>
                 <tbody>
                   {contractDetails.length === 0 ? (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No payments recorded for this contract period.</td></tr>
+                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No payments recorded for this contract period.</td></tr>
                   ) : (
-                    contractDetails.map(p => (
-                      <tr key={p.id}>
-                        <td>
-                          {p.month_covered
-                            ? new Date(String(p.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-                            : '—'}
-                          {String(p.month_covered).includes('-partial') && (
-                            <span style={{ fontSize: '10px', color: '#f97316', marginLeft: '6px', fontWeight: 600 }}>(Remainder)</span>
-                          )}
-                        </td>
-                        <td>{p.due_date ? new Date(p.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
-                        <td>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td>{p.receipt_number || '—'}</td>
-                        <td>
-                          <span className={`status-badge ${p.status.toLowerCase()}`}>
-                            {p.status}
-                          </span>
-                        </td>
-                        <td>
-                          {p.status === 'Paid' && p.receipt_number ? (
-                            <button
-                              className="btn-action"
-                              title="Print Receipt"
-                              onClick={() => navigate(`/receipt?id=${p.id}`)}
-                              style={{ color: '#3b82f6' }}
-                            >
-                              <i className="fa-solid fa-print"></i>
-                            </button>
-                          ) : (
-                            <span style={{ color: '#cbd5e1' }}>—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                    contractDetails.map(p => {
+                      // Calculate the coverage period display
+                      const monthStr = p.month_covered ? String(p.month_covered).replace('-partial', '') : null;
+                      let coverageDisplay = '—';
+                      if (monthStr && p.due_date) {
+                        const startObj = new Date(monthStr);
+                        const dueObj = new Date(p.due_date);
+                        const fixedDay = dueObj.getDate();
+                        
+                        // Set the start date to the actual registration day (e.g., 13)
+                        startObj.setDate(fixedDay);
+                        
+                        const endObj = new Date(startObj);
+                        endObj.setMonth(endObj.getMonth() + 1); // Add exactly 1 month
+                        
+                        // Handle end-of-month edge cases (e.g., Jan 31 + 1 month = Feb 28)
+                        if (endObj.getDate() !== fixedDay) {
+                          endObj.setDate(0); 
+                        }
+
+                        coverageDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+                      }
+
+                      return (
+                        <tr key={p.id}>
+                          <td>
+                            {p.month_covered
+                              ? new Date(String(p.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                              : '—'}
+                            {String(p.month_covered).includes('-partial') && (
+                              <span style={{ fontSize: '10px', color: '#f97316', marginLeft: '6px', fontWeight: 600 }}>(Remainder)</span>
+                            )}
+                          </td>
+                          <td style={{ color: '#64748b', fontSize: '12px' }}>{coverageDisplay}</td>
+                          <td>{p.due_date ? new Date(p.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+                          <td>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td>{p.receipt_number || '—'}</td>
+                          <td>
+                            <span className={`status-badge ${p.status.toLowerCase()}`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td>
+                            {p.status === 'Paid' && p.receipt_number ? (
+                              <button
+                                className="btn-action"
+                                title="Print Receipt"
+                                onClick={() => navigate(`/receipt?id=${p.id}`)}
+                                style={{ color: '#3b82f6' }}
+                              >
+                                <i className="fa-solid fa-print"></i>
+                              </button>
+                            ) : (
+                              <span style={{ color: '#cbd5e1' }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

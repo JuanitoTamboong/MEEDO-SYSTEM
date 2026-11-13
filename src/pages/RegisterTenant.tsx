@@ -128,9 +128,8 @@ export default function RegisterTenant() {
         .update({ status: 'Occupied', tenant_name: formData.full_name.trim() })
         .eq('id', selectedStall.id);
 
-      const nextMonth = new Date(today);
-      nextMonth.setMonth(nextMonth.getMonth() + 1); 
-      const nextMonthString = nextMonth.toISOString().split('T')[0];
+      // 🛑 FIX: The due date is the same day they registered (e.g., Nov 13)
+      const dueDateString = todayString; 
 
       const receiptNumber = `REG-${todayString.replace(/-/g, '')}-${tenantData.id}`;
 
@@ -139,7 +138,7 @@ export default function RegisterTenant() {
         tenant_name: formData.full_name.trim(),
         amount: selectedStall.monthly_rent,
         payment_date: todayString,
-        due_date: nextMonthString,
+        due_date: dueDateString, // 🛑 FIXED: Due in the same month
         month_covered: `${todayString.slice(0, 7)}-01`, 
         status: 'Paid',
         receipt_number: receiptNumber,
