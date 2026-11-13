@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'; // Added React import
+import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase/lib/supabase';
 import { recordAuditLog } from '../supabase/lib/audit';
