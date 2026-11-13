@@ -245,10 +245,10 @@
 .action-buttons .btn-icon.danger:hover { background: #fff0f0; border-color: #dc2626; }
 
 /* ============================================================
-   7. MODALS & PAYMENT HISTORY
+   7. MODALS & PAYMENT HISTORY (Scoped to .contracts-page)
    ============================================================ */
 
-.modal-backdrop {
+.contracts-page .modal-backdrop {
     position: fixed !important;
     top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
     z-index: 99999 !important;
@@ -260,14 +260,14 @@
     backdrop-filter: blur(4px);
 }
 
-.modal-backdrop.active { display: flex !important; }
+.contracts-page .modal-backdrop.active { display: flex !important; }
 
-.modal-box {
+.contracts-page .modal-box {
     position: relative;
     display: flex;
     flex-direction: column;
-    width: 100% !important;
-    max-width: 1100px !important;
+    width: 100%; /* Removed !important */
+    max-width: 1100px; /* Removed !important */
     max-height: calc(100vh - 40px) !important;
     margin: auto !important;
     padding: 28px !important;
@@ -278,7 +278,7 @@
     box-shadow: 0 15px 50px rgba(0, 0, 0, 0.18);
 }
 
-.modal-box h3 {
+.contracts-page .modal-box h3 {
     flex-shrink: 0;
     margin: 0 0 8px;
     color: #263b2e;
@@ -286,7 +286,7 @@
     font-weight: 700;
 }
 
-.modal-box > p {
+.contracts-page .modal-box > p {
     flex-shrink: 0;
     margin: 0 0 15px;
     color: #718078;
@@ -294,12 +294,26 @@
     line-height: 1.6;
 }
 
+/* Ensure icons inside modals look right */
+.contracts-page .modal-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    display: grid;
+    place-items: center;
+    font-size: 16px;
+    margin-bottom: 16px;
+}
+
+.contracts-page .danger-icon { background: #fef2f2; color: #dc2626; }
+.contracts-page .info-icon { background: #eff6ff; color: #2563eb; }
+.contracts-page .success-icon { background: #ecfdf5; color: #059669; }
+
 /* ============================================================
    8. PAYMENT HISTORY TABLE (Inside Modal)
    ============================================================ */
 
-/* Note: These tables are NOT inside .data-panel, so they are free to shrink */
-.modal-box .table-responsive {
+.contracts-page .modal-box .table-responsive {
     display: block;
     flex: 0 1 auto;
     min-width: 0;
@@ -317,22 +331,22 @@
     scrollbar-color: #b8cabe #edf1ee;
 }
 
-.modal-box .table-responsive table {
+.contracts-page .modal-box .table-responsive table {
     width: 100% !important;
-    min-width: 1020px !important; /* Still needs width for the 7 columns */
+    min-width: 1020px !important;
     margin: 0;
     table-layout: fixed !important;
     border-collapse: collapse !important;
     border-spacing: 0;
 }
 
-.modal-box .table-responsive thead {
+.contracts-page .modal-box .table-responsive thead {
     position: sticky;
     top: 0;
     z-index: 5;
 }
 
-.modal-box .table-responsive th {
+.contracts-page .modal-box .table-responsive th {
     padding: 13px 12px;
     border: 1px solid #d5dfd8;
     border-bottom: 2px solid #217346;
@@ -346,7 +360,7 @@
     white-space: nowrap;
 }
 
-.modal-box .table-responsive td {
+.contracts-page .modal-box .table-responsive td {
     padding: 12px;
     border: 1px solid #e2e8e3;
     color: #34443a;
@@ -357,12 +371,12 @@
     text-overflow: ellipsis;
 }
 
-.modal-box .table-responsive tbody tr { background: #ffffff; transition: background 0.15s ease; }
-.modal-box .table-responsive tbody tr:nth-child(even) { background: #f8faf9; }
-.modal-box .table-responsive tbody tr:hover { background: #edf6ef; }
+.contracts-page .modal-box .table-responsive tbody tr { background: #ffffff; transition: background 0.15s ease; }
+.contracts-page .modal-box .table-responsive tbody tr:nth-child(even) { background: #f8faf9; }
+.contracts-page .modal-box .table-responsive tbody tr:hover { background: #edf6ef; }
 
 /* Print Button inside Modal */
-.modal-box .btn-action {
+.contracts-page .modal-box .btn-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -379,13 +393,13 @@
     transition: 0.2s ease;
 }
 
-.modal-box .btn-action:hover {
+.contracts-page .modal-box .btn-action:hover {
     border-color: #217346;
     background: #dceee1;
     transform: translateY(-1px);
 }
 
-.modal-actions {
+.contracts-page .modal-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -399,32 +413,31 @@
    ============================================================ */
 
 @media (max-width: 1400px) {
-    /* Only the main directory table stays wide */
     .data-panel .table-responsive > table.contract-directory-table {
         min-width: 1300px !important;
     }
 }
 
 @media (max-width: 768px) {
-    .modal-backdrop { padding: 12px; }
-    .modal-box {
+    .contracts-page .modal-backdrop { padding: 12px; }
+    .contracts-page .modal-box {
         width: calc(100vw - 24px) !important;
         max-width: none !important;
         max-height: calc(100vh - 24px) !important;
         padding: 18px !important;
     }
-    .modal-box h3 { font-size: 18px; }
-    .modal-box .table-responsive { max-height: 55vh; }
-    .modal-actions { flex-wrap: wrap; }
+    .contracts-page .modal-box h3 { font-size: 18px; }
+    .contracts-page .modal-box .table-responsive { max-height: 55vh; }
+    .contracts-page .modal-actions { flex-wrap: wrap; }
 }
 
 @media (max-width: 480px) {
-    .modal-backdrop { padding: 8px; }
-    .modal-box {
+    .contracts-page .modal-backdrop { padding: 8px; }
+    .contracts-page .modal-box {
         width: calc(100vw - 16px) !important;
         max-height: calc(100vh - 16px) !important;
         padding: 14px !important;
     }
-    .modal-box h3 { font-size: 17px; }
-    .modal-box .table-responsive { max-height: 50vh; }
+    .contracts-page .modal-box h3 { font-size: 17px; }
+    .contracts-page .modal-box .table-responsive { max-height: 50vh; }
 }

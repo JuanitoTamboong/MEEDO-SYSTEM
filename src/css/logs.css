@@ -1,3 +1,5 @@
+
+
 .page-header {
     display: flex;
     justify-content: space-between;
@@ -250,11 +252,10 @@ tr:hover td {
     display: flex;
 }
 
-/* FIX: Targeted the modal box directly inside the backdrop to prevent global stretching */
-.modal-backdrop .modal-box {
+.modal-box {
     background: white;
     width: 100%;
-    max-width: 450px !important; /* Forces the size to stay compact */
+    max-width: 400px;
     border-radius: 8px;
     padding: 24px;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
@@ -272,14 +273,14 @@ tr:hover td {
 
 .danger-icon { background: #fef2f2; color: #dc2626; }
 
-.modal-backdrop .modal-box h3 {
+.modal-box h3 {
     font-size: 16px;
     font-weight: 600;
     color: #0f172a;
     margin-bottom: 8px;
 }
 
-.modal-backdrop .modal-box p {
+.modal-box p {
     font-size: 13px;
     color: #64748b;
     margin-bottom: 16px;
