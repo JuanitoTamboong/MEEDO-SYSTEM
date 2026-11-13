@@ -17,14 +17,17 @@ export default function StallDetails() {
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [totalOutstanding, setTotalOutstanding] = useState(0);
   const [unpaidBills, setUnpaidBills] = useState<any[]>([]);
-  
+
+  // For expand/collapse of grouped receipts
+  const [expandedReceipts, setExpandedReceipts] = useState<Set<string>>(new Set());
+
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
   const [vacateModalOpen, setVacateModalOpen] = useState(false);
   const [deletePaymentModalOpen, setDeletePaymentModalOpen] = useState(false);
   const [payBalanceModalOpen, setPayBalanceModalOpen] = useState(false);
-  
+
   const [selectedPaymentToDelete, setSelectedPaymentToDelete] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -57,7 +60,7 @@ export default function StallDetails() {
   async function fetchData() {
     setIsLoading(true);
     setErrorMsg('');
-    
+
     try {
       const { data: stallData, error: stallError } = await supabase
         .from('stalls').select('*').eq('stall_number', stallNumber).single();
@@ -84,8 +87,8 @@ export default function StallDetails() {
         .from('payments')
         .select('*')
         .eq('stall_id', stallData.id)
-        .order('month_covered', { ascending: true }); 
-      
+        .order('month_covered', { ascending: true });
+
       if (historyData) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -96,16 +99,15 @@ export default function StallDetails() {
         const processedUnpaid = unpaid.map((bill: any) => {
           const dueDate = new Date(bill.due_date);
           const graceDays = bill.grace_period_days || 3;
-          
+
           const penaltyStartDate = new Date(dueDate);
           penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
-          
+
           if (today > penaltyStartDate && bill.status === 'Pending') {
-            // 🛑 FIX: Changed to 25%
-            const penaltyAmount = Number(bill.amount) * 0.25; 
-            return { 
-              ...bill, 
-              status: 'Overdue', 
+            const penaltyAmount = Number(bill.amount) * 0.25;
+            return {
+              ...bill,
+              status: 'Overdue',
               penalty: penaltyAmount,
               total_due: Number(bill.amount) + penaltyAmount
             };
@@ -126,9 +128,9 @@ export default function StallDetails() {
           const regDate = activeTenant?.registration_date ? new Date(activeTenant.registration_date) : new Date();
           const nextDue = new Date();
           nextDue.setDate(regDate.getDate());
-          
+
           if (nextDue <= new Date()) {
-             nextDue.setMonth(nextDue.getMonth() + 1);
+            nextDue.setMonth(nextDue.getMonth() + 1);
           }
 
           setCurrentPayment({
@@ -158,9 +160,40 @@ export default function StallDetails() {
     }
   }
 
+  // --- Grouped receipts (real-data driven) ---
+  const groupedReceipts = (() => {
+    const groups: Record<string, any> = {};
+    for (const p of paymentHistory) {
+      const key = p.receipt_number || `solo-${p.id}`;
+      if (!groups[key]) {
+        groups[key] = {
+          receipt_number: p.receipt_number || null,
+          payment_date: p.payment_date,
+          ids: [],
+          months: [],
+          total: 0,
+          status: p.status
+        };
+      }
+      groups[key].ids.push(p.id);
+      groups[key].months.push(p.month_covered);
+      groups[key].total += Number(p.amount);
+    }
+    return Object.values(groups);
+  })();
+
+  const toggleReceiptExpand = (key: string) => {
+    setExpandedReceipts(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const handleVacate = async () => {
     if (!stall || !tenant) return;
-    
+
     if (userRole !== 'Administrator' && userRole !== 'Meedo Personnel') {
       setVacateModalOpen(false);
       setPermissionMessage("Only Administrators and Meedo Personnel can vacate a stall.");
@@ -177,7 +210,7 @@ export default function StallDetails() {
       await supabase.from('stalls').update({ status: 'Vacant', tenant_name: null }).eq('id', stall.id);
 
       await recordAuditLog('Vacate & Delete', `Deleted tenant '${tenant.full_name}' and all their records from stall '${stall.stall_number}'.`, 'Stall', stall.id);
-      
+
       setVacateModalOpen(false);
       setIsVacateSuccess(true);
       setSuccessMessage(`Tenant '${tenant.full_name}' and all their records have been successfully deleted.`);
@@ -193,24 +226,24 @@ export default function StallDetails() {
   const handleDeletePayment = async () => {
     if (!selectedPaymentToDelete) return;
     setIsDeleting(true);
-    
+
     try {
       await supabase.from('payments').delete().eq('id', selectedPaymentToDelete.id);
-      
+
       await recordAuditLog(
-        'Delete Payment', 
-        `Deleted payment record for ${new Date(selectedPaymentToDelete.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.`, 
-        'Payment', 
+        'Delete Payment',
+        `Deleted payment record for ${new Date(selectedPaymentToDelete.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.`,
+        'Payment',
         selectedPaymentToDelete.id
       );
 
       setSuccessMessage(`Payment for ${new Date(selectedPaymentToDelete.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} has been deleted.`);
       setIsVacateSuccess(false);
       setShowSuccessPopup(true);
-      
+
       setDeletePaymentModalOpen(false);
       setSelectedPaymentToDelete(null);
-      
+
       fetchData();
 
     } catch (err: any) {
@@ -235,20 +268,21 @@ export default function StallDetails() {
     try {
       const todayStr = new Date().toISOString().split('T')[0];
       let remainingMonths = payMonths;
+      // Shared receipt for all bills paid in this batch
+      const sharedReceiptNum = `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 100000)}`;
 
       for (const bill of unpaidBills) {
         if (remainingMonths <= 0) break;
-        
+
         if (String(bill.month_covered).includes('-partial')) continue;
 
-        const receiptNum = `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 100000)}`;
         const penaltyAmount = bill.status === 'Overdue' ? bill.penalty : 0;
 
         await supabase.from('payments').update({
           status: 'Paid',
           payment_date: todayStr,
           penalty: penaltyAmount,
-          receipt_number: receiptNum
+          receipt_number: sharedReceiptNum
         }).eq('id', bill.id);
 
         remainingMonths -= 1;
@@ -265,7 +299,7 @@ export default function StallDetails() {
       setSuccessMessage(`Payment for ${payMonths} month(s) (₱${amountToPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}) recorded successfully.`);
       setIsVacateSuccess(false);
       setShowSuccessPopup(true);
-      
+
       fetchData();
     } catch (err: any) {
       alert("Error processing payment: " + err.message);
@@ -339,7 +373,7 @@ export default function StallDetails() {
 
   const paymentStatus = currentPayment?.status || 'Unpaid';
   const statusClass = paymentStatus.toLowerCase() === 'overdue' ? 'overdue' : (paymentStatus.toLowerCase() === 'paid' ? 'paid' : 'unpaid');
-  
+
   let billingCycleText = '1st of the month';
   if (tenant?.registration_date) {
     const day = new Date(tenant.registration_date).getDate();
@@ -355,7 +389,7 @@ export default function StallDetails() {
 
   return (
     <div className="content-wrapper">
-      
+
       <div className="page-header">
         <div>
           <h1>Stall Details</h1>
@@ -390,7 +424,7 @@ export default function StallDetails() {
             <span className={`status-badge ${statusClass}`}>{paymentStatus}</span>
           </div>
           <div className="panel-body" style={{ padding: '24px' }}>
-            
+
             <div className="info-row">
               <span className="info-label">Monthly Due Date</span>
               <span className="info-value">{billingCycleText}</span>
@@ -399,7 +433,7 @@ export default function StallDetails() {
             <div className="info-row">
               <span className="info-label">Payment Covers</span>
               <span className="info-value">
-                {currentPayment?.month_covered 
+                {currentPayment?.month_covered
                   ? new Date(String(currentPayment.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
                   : new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
               </span>
@@ -410,7 +444,6 @@ export default function StallDetails() {
                 <div className="info-row">
                   <span className="info-label">{currentPayment.status === 'Paid' ? 'Amount Paid' : 'Amount Due'}</span>
                   <span className="info-value" style={{ fontWeight: 600 }}>
-                    {/* 🛑 FIX: Show the total_due (with penalty) if overdue, otherwise show the base amount */}
                     ₱{Number(currentPayment.status === 'Overdue' ? currentPayment.total_due : currentPayment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -425,6 +458,22 @@ export default function StallDetails() {
                     <span className="info-label">Date Paid</span>
                     <span className="info-value">
                       {new Date(currentPayment.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
+                )}
+                {currentPayment.status === 'Paid' && currentPayment.receipt_number && (
+                  <div className="info-row">
+                    <span className="info-label">Receipt #</span>
+                    <span className="info-value" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {currentPayment.receipt_number}
+                      <button
+                        className="btn-action"
+                        title="Print Receipt"
+                        onClick={() => navigate(`/receipt?id=${currentPayment.id}`)}
+                        style={{ color: '#3b82f6' }}
+                      >
+                        <i className="fa-solid fa-print"></i>
+                      </button>
                     </span>
                   </div>
                 )}
@@ -457,7 +506,7 @@ export default function StallDetails() {
         </div>
       )}
 
-      {paymentHistory.length > 0 && (
+      {groupedReceipts.length > 0 && (
         <div className="data-panel">
           <div className="data-header"><h2>Payment History</h2></div>
           <div className="table-responsive">
@@ -473,38 +522,111 @@ export default function StallDetails() {
                 </tr>
               </thead>
               <tbody>
-                {paymentHistory.map((payment) => (
-                  <tr key={payment.id}>
-                    <td>{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
-                    <td>₱{Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td>{payment.receipt_number || '—'}</td>
-                    <td>{payment.month_covered ? new Date(String(payment.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}</td>
-                    <td><span className={`status-badge ${payment.status?.toLowerCase() || 'paid'}`}>{payment.status || 'Paid'}</span></td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        <button 
-                          className="btn-action" 
-                          title="Print Receipt"
-                          onClick={() => navigate(`/receipt?id=${payment.id}`)}
-                          style={{ color: '#3b82f6' }}
-                        >
-                          <i className="fa-solid fa-print"></i>
-                        </button>
+                {groupedReceipts.map((group: any) => {
+                  const key = group.receipt_number || `solo-${group.ids[0]}`;
+                  const isExpanded = expandedReceipts.has(key);
+                  const monthLabels = group.months.map((m: any) =>
+                    m ? new Date(String(m).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'
+                  );
 
-                        <button 
-                          className="btn-action danger" 
-                          title="Delete Payment"
-                          onClick={() => {
-                            setSelectedPaymentToDelete(payment);
-                            setDeletePaymentModalOpen(true);
-                          }}
-                        >
-                          <i className="fa-solid fa-trash"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                  return (
+                    <>
+                      <tr key={key} style={{ cursor: group.ids.length > 1 ? 'pointer' : 'default' }} onClick={() => group.ids.length > 1 && toggleReceiptExpand(key)}>
+                        <td>{group.payment_date ? new Date(group.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+                        <td>₱{Number(group.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td>{group.receipt_number || '—'}</td>
+                        <td>
+                          {group.ids.length > 1 ? (
+                            <>
+                              <i className={`fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}`} style={{ marginRight: '6px', fontSize: '11px' }}></i>
+                              {monthLabels.join(', ')}
+                            </>
+                          ) : (
+                            monthLabels[0]
+                          )}
+                        </td>
+                        <td><span className={`status-badge ${group.status?.toLowerCase() || 'paid'}`}>{group.status || 'Paid'}</span></td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                            <button
+                              className="btn-action"
+                              title="Print Receipt"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(group.ids.length > 1
+                                  ? `/receipt?ids=${group.ids.join(',')}`
+                                  : `/receipt?id=${group.ids[0]}`
+                                );
+                              }}
+                              style={{ color: '#3b82f6' }}
+                            >
+                              <i className="fa-solid fa-print"></i>
+                            </button>
+
+                            <button
+                              className="btn-action danger"
+                              title={group.ids.length > 1 ? "Delete full receipt" : "Delete Payment"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // For single payments, keep existing modal flow
+                                if (group.ids.length === 1) {
+                                  const p = paymentHistory.find((x: any) => x.id === group.ids[0]);
+                                  setSelectedPaymentToDelete(p);
+                                  setDeletePaymentModalOpen(true);
+                                } else {
+                                  // Grouped: open modal for first item, or handle separately
+                                  const p = paymentHistory.find((x: any) => x.id === group.ids[0]);
+                                  setSelectedPaymentToDelete(p);
+                                  setDeletePaymentModalOpen(true);
+                                }
+                              }}
+                            >
+                              <i className="fa-solid fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {isExpanded && group.ids.length > 1 && (
+                        group.ids.map((id: number, idx: number) => {
+                          const p = paymentHistory.find((x: any) => x.id === id);
+                          if (!p) return null;
+                          return (
+                            <tr key={`child-${id}`} style={{ background: '#f8fafc', fontSize: '12px' }}>
+                              <td style={{ paddingLeft: '32px' }}>{p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+                              <td>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                              <td>{p.receipt_number || '—'}</td>
+                              <td>{p.month_covered ? new Date(String(p.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}</td>
+                              <td><span className={`status-badge ${p.status?.toLowerCase() || 'paid'}`}>{p.status || 'Paid'}</span></td>
+                              <td>
+                                <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                                  <button
+                                    className="btn-action"
+                                    title="Print this month"
+                                    onClick={() => navigate(`/receipt?id=${p.id}`)}
+                                    style={{ color: '#3b82f6' }}
+                                  >
+                                    <i className="fa-solid fa-print"></i>
+                                  </button>
+                                  <button
+                                    className="btn-action danger"
+                                    title="Delete this month"
+                                    onClick={() => {
+                                      setSelectedPaymentToDelete(p);
+                                      setDeletePaymentModalOpen(true);
+                                    }}
+                                  >
+                                    <i className="fa-solid fa-trash"></i>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -527,7 +649,7 @@ export default function StallDetails() {
                 <i className="fa-solid fa-money-bill-wave"></i> Record Rent Payment
               </Link>
             )}
-            
+
             <button onClick={handleEditTenantClick} className="btn-secondary">
               <i className="fa-solid fa-pen"></i> Edit Tenant
             </button>

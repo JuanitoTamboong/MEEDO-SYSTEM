@@ -6,9 +6,17 @@ import '../css/receipt.css';
 export default function Receipt() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const paymentId = searchParams.get('id');
 
-  const [payment, setPayment] = useState<any>(null);
+  // Support both ?id=1 (single) and ?ids=1,2,3 (grouped)
+  const idParam = searchParams.get('id');
+  const idsParam = searchParams.get('ids');
+  const paymentIds: number[] = idsParam
+    ? idsParam.split(',').map(Number).filter(n => !isNaN(n))
+    : idParam
+      ? [Number(idParam)]
+      : [];
+
+  const [payments, setPayments] = useState<any[]>([]);
   const [stall, setStall] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -16,23 +24,33 @@ export default function Receipt() {
 
   useEffect(() => {
     async function fetchData() {
-      if (!paymentId) {
+      if (paymentIds.length === 0) {
         setErrorMsg("No payment ID provided.");
         setIsLoading(false);
         return;
       }
 
       try {
-        const { data: payData, error: payError } = await supabase.from('payments').select('*').eq('id', paymentId).single();
-        
-        if (payError || !payData) throw new Error("Receipt not found.");
-        
-        setPayment(payData);
+        const { data: payData, error: payError } = await supabase
+          .from('payments')
+          .select('*')
+          .in('id', paymentIds)
+          .order('month_covered', { ascending: true });
 
-        const { data: stallData } = await supabase.from('stalls').select('*').eq('id', payData.stall_id).single();
+        if (payError || !payData || payData.length === 0) {
+          throw new Error("Receipt not found.");
+        }
+
+        setPayments(payData);
+
+        const stallId = payData[0].stall_id;
+
+        const { data: stallData } = await supabase
+          .from('stalls').select('*').eq('id', stallId).single();
         if (stallData) setStall(stallData);
 
-        const { data: tenantData } = await supabase.from('tenants').select('*').eq('stall_id', payData.stall_id).eq('status', 'active').maybeSingle();
+        const { data: tenantData } = await supabase
+          .from('tenants').select('*').eq('stall_id', stallId).eq('status', 'active').maybeSingle();
         if (tenantData) setTenant(tenantData);
 
       } catch (err: any) {
@@ -42,13 +60,12 @@ export default function Receipt() {
       }
     }
     fetchData();
-  }, [paymentId]);
+  }, [idsParam, idParam]);
 
   const handlePrint = () => {
     window.print();
   };
 
-  // --- ADDED LOADING SCREEN ---
   if (isLoading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%', background: '#f8fafc' }}>
@@ -59,7 +76,7 @@ export default function Receipt() {
     );
   }
 
-  if (errorMsg || !payment) {
+  if (errorMsg || payments.length === 0) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%', background: '#f8fafc' }}>
         <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '20px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -70,10 +87,17 @@ export default function Receipt() {
     );
   }
 
+  // Aggregated values (works for both single and grouped)
+  const receiptNumber = payments[0].receipt_number || 'N/A';
+  const paymentDate = payments[0].payment_date;
+  const totalAmount = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalPenalty = payments.reduce((sum, p) => sum + Number(p.penalty || 0), 0);
+  const grandTotal = totalAmount + totalPenalty;
+
   return (
     <div className="receipt-page">
       <div className="receipt-container">
-        
+
         <div className="receipt-header">
           <h2>ODIONGAN PUBLIC MARKET</h2>
           <p>Stall & Rental Monitoring System</p>
@@ -83,10 +107,10 @@ export default function Receipt() {
         <div className="receipt-divider"></div>
 
         <div className="receipt-info">
-          <div><strong>Receipt No:</strong> {payment.receipt_number || 'N/A'}</div>
-          <div><strong>Date Paid:</strong> {payment.payment_date ? new Date(payment.payment_date).toLocaleDateString() : 'N/A'}</div>
+          <div><strong>Receipt No:</strong> {receiptNumber}</div>
+          <div><strong>Date Paid:</strong> {paymentDate ? new Date(paymentDate).toLocaleDateString() : 'N/A'}</div>
           <div><strong>Stall No:</strong> {stall?.stall_number}</div>
-          <div><strong>Tenant:</strong> {tenant?.full_name || payment.tenant_name}</div>
+          <div><strong>Tenant:</strong> {tenant?.full_name || payments[0]?.tenant_name}</div>
           <div><strong>Business:</strong> {tenant?.business_name || '—'}</div>
         </div>
 
@@ -97,14 +121,27 @@ export default function Receipt() {
             <span>Description</span>
             <span>Amount</span>
           </div>
-          <div className="receipt-row">
-            <span>Monthly Rent ({payment.month_covered ? new Date(payment.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'N/A'})</span>
-            <span>₱{Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-          </div>
-          {payment.penalty > 0 && (
+
+          {payments.map(p => (
+            <div className="receipt-row" key={p.id}>
+              <span>
+                Monthly Rent (
+                {p.month_covered
+                  ? new Date(String(p.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                  : 'N/A'}
+                {String(p.month_covered).includes('-partial') && (
+                  <span style={{ fontSize: '11px', color: '#f97316', marginLeft: '6px', fontWeight: 600 }}>(Remainder)</span>
+                )}
+                )
+              </span>
+              <span>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            </div>
+          ))}
+
+          {totalPenalty > 0 && (
             <div className="receipt-row">
               <span>Penalty</span>
-              <span>₱{Number(payment.penalty).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              <span>₱{totalPenalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
           )}
         </div>
@@ -113,7 +150,7 @@ export default function Receipt() {
 
         <div className="receipt-total">
           <span>TOTAL PAID</span>
-          <span>₱{(Number(payment.amount) + Number(payment.penalty || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+          <span>₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
         </div>
 
         <div className="receipt-divider"></div>

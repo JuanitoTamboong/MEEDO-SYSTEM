@@ -103,15 +103,41 @@ export default function FinancialReports() {
       const tenants = tenantCount || 0;
       setCollectionRate(tenants > 0 ? Math.round(((paidData?.length || 0) / tenants) * 100) : 0);
 
-      // 4. Fetch Overdue Payments
-      const { data: overdueData } = await supabase
+      // 4. Fetch Dynamic Overdue Payments (Pending bills past due date + grace period)
+      const { data: pendingBills } = await supabase
         .from('payments')
         .select('*')
-        .eq('status', 'Overdue')
-        .order('due_date', { ascending: true });
+        .in('status', ['Pending', 'Overdue']); 
 
-      if (overdueData) {
-        const enrichedOverdue = overdueData.map(o => {
+      if (pendingBills) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Filter to only those actually overdue (past due date + grace period)
+        const dynamicOverdue = pendingBills.map(o => {
+          const dueDate = new Date(o.due_date);
+          const graceDays = o.grace_period_days || 3;
+          const penaltyStartDate = new Date(dueDate);
+          penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+          
+          if (today > penaltyStartDate) {
+            const penaltyAmount = Number(o.amount) * 0.25;
+            const daysLate = Math.ceil((today.getTime() - penaltyStartDate.getTime()) / (1000 * 3600 * 24));
+            
+            return { 
+              ...o, 
+              status: 'Overdue',
+              penalty: penaltyAmount,
+              total_due: Number(o.amount) + penaltyAmount,
+              days_late: daysLate,
+              penalty_start_date: penaltyStartDate
+            };
+          }
+          return null;
+        }).filter(Boolean); // Remove non-overdue bills
+
+        const enrichedOverdue = dynamicOverdue.map(o => {
+          if (!o) return null;
           const stall = stallMap.get(o.stall_id);
           const section = stall ? sectionMap.get(stall.section_id) : null;
           const realTenantName = tenantMap.get(o.stall_id) || o.tenant_name;
@@ -122,8 +148,12 @@ export default function FinancialReports() {
             section_name: section?.section_name,
             display_tenant_name: realTenantName 
           };
-        });
-        setOverduePayments(enrichedOverdue);
+        }).filter(Boolean); 
+
+        // Sort by oldest due date first
+        enrichedOverdue.sort((a, b) => new Date(a!.due_date).getTime() - new Date(b!.due_date).getTime());
+        
+        setOverduePayments(enrichedOverdue as any[]);
       }
 
       // 5. Fetch Annual Data (Filtered by month_covered)
@@ -397,10 +427,7 @@ export default function FinancialReports() {
                     <tr><td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No overdue accounts found.</td></tr>
                   ) : (
                     overduePayments.map(o => {
-                      const daysOverdue = Math.ceil((new Date().getTime() - new Date(o.due_date).getTime()) / (1000 * 3600 * 24));
-                      const penalty = Number(o.amount) * 0.25;
-                      const totalDue = Number(o.amount) + penalty;
-
+                      // Use the pre-calculated values from fetchData
                       return (
                         <tr key={o.id}>
                           <td><strong style={{ color: '#dc2626' }}>{o.stall_number || '—'}</strong></td>
@@ -408,9 +435,9 @@ export default function FinancialReports() {
                           <td>{o.section_name || '—'}</td>
                           <td>₱{Number(o.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td>{new Date(o.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                          <td>{daysOverdue} days</td>
-                          <td style={{ color: '#dc2626' }}>+ ₱{penalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td><strong style={{ color: '#dc2626' }}>₱{totalDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
+                          <td>{o.days_late} days</td>
+                          <td style={{ color: '#dc2626' }}>+ ₱{Number(o.penalty).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td><strong style={{ color: '#dc2626' }}>₱{Number(o.total_due).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
                         </tr>
                       );
                     })

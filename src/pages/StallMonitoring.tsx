@@ -54,10 +54,11 @@ export default function StallMonitoring() {
       const { data: tenantsData } = await supabase.from('tenants').select('*').eq('status', 'active');
       const { data: sectionsData } = await supabase.from('sections').select('*');
       
+      // Order by due_date ascending to process oldest first
       const { data: paymentsData } = await supabase
         .from('payments')
         .select('*')
-        .order('due_date', { ascending: false }); 
+        .order('due_date', { ascending: true }); 
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -67,27 +68,42 @@ export default function StallMonitoring() {
           const activeTenant = tenantsData?.find((t) => t.stall_id === s.id);
           const stallPayments = paymentsData?.filter((p) => p.stall_id === s.id) || [];
           
-          const latestPaid = stallPayments.find(p => p.status === 'Paid');
-          let latestPending = stallPayments.find(p => p.status === 'Pending' || p.status === 'Overdue');
-          
-          if (latestPending) {
-            const dueDate = new Date(latestPending.due_date);
-            const graceDays = latestPending.grace_period_days || 3;
-            const penaltyStartDate = new Date(dueDate);
-            penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
-            penaltyStartDate.setHours(0, 0, 0, 0);
+          // Find the oldest unpaid bill that is due today or earlier
+          const currentDueBill = stallPayments.find(p => {
+             if (p.status === 'Paid') return false;
+             const dueDate = new Date(p.due_date);
+             dueDate.setHours(0,0,0,0);
+             return dueDate <= today;
+          });
 
-            if (today > penaltyStartDate) {
-              latestPending = { ...latestPending, status: 'Overdue' };
-            }
-          }
+          // If no overdue/pending bill for today, find the nearest future bill
+          const nextBill = stallPayments.find(p => {
+             if (p.status === 'Paid') return false;
+             const dueDate = new Date(p.due_date);
+             dueDate.setHours(0,0,0,0);
+             return dueDate > today;
+          });
 
-          const currentRecord = latestPaid || latestPending;
+          const activeBill = currentDueBill || nextBill;
           const section = sectionsData?.find((sec) => sec.id === s.section_id);
           
           let pStatus = 'Available';
           if (s.status === 'Occupied' && activeTenant) {
-            pStatus = latestPending ? latestPending.status : (currentRecord ? currentRecord.status : 'Pending');
+             if (!activeBill) {
+               pStatus = 'Paid'; 
+             } else {
+               const dueDate = new Date(activeBill.due_date);
+               const graceDays = activeBill.grace_period_days || 3;
+               const penaltyStartDate = new Date(dueDate);
+               penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+               penaltyStartDate.setHours(0, 0, 0, 0);
+
+               if (today > penaltyStartDate) {
+                 pStatus = 'Overdue';
+               } else {
+                 pStatus = 'Pending';
+               }
+             }
           }
 
           return {
@@ -99,7 +115,7 @@ export default function StallMonitoring() {
             contact_number: activeTenant?.contact_number || null,
             section_name: section?.section_name || null,
             payment_status: pStatus,
-            due_date: latestPending?.due_date || currentRecord?.due_date || null
+            due_date: currentDueBill?.due_date || nextBill?.due_date || null
           };
         });
 
@@ -333,7 +349,6 @@ export default function StallMonitoring() {
             </h2>
           </div>
           <div className="table-responsive">
-            {/* 🛑 FIX: Added className="overdue-table" to target exactly 8 columns */}
             <table className="overdue-table">
               <thead>
                 <tr>
@@ -341,6 +356,7 @@ export default function StallMonitoring() {
                   <th>Tenant</th>
                   <th>Section</th>
                   <th>Amount Due</th>
+                  <th>Due Date</th> {/* FIX: Added missing Due Date header */}
                   <th>Days Overdue</th>
                   <th>Penalty</th>
                   <th>Total Due</th>
@@ -370,6 +386,7 @@ export default function StallMonitoring() {
                       <td>{overdue.tenant_name || '—'}</td>
                       <td>{overdue.section_name || '—'}</td>
                       <td>₱{overdue.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td>{dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td> {/* FIX: Added the Due Date cell */}
                       <td>{daysOverdue} days</td>
                       <td style={{ color: '#dc2626' }}>+ ₱{penalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       <td><strong style={{ color: '#dc2626' }}>₱{totalDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>

@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase/lib/supabase';
 import { recordAuditLog } from '../supabase/lib/audit';
 import '../css/contracts.css';
 
 export default function Contracts() {
+  const navigate = useNavigate();
+
   const [contracts, setContracts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,8 +25,8 @@ export default function Contracts() {
   const [payAll, setPayAll] = useState(false);
   const [editStartDate, setEditStartDate] = useState('');
   const [editEndDate, setEditEndDate] = useState('');
-  
-  const [payMonths, setPayMonths] = useState(1); 
+
+  const [payMonths, setPayMonths] = useState(1);
 
   const [isActionLoading, setIsActionLoading] = useState(false);
 
@@ -63,20 +66,21 @@ export default function Contracts() {
 
           let validPayments = [];
           if (startDate && endDateStr) {
-             const startObj = new Date(startDate);
-             const endObj = new Date(endDateStr);
-             endObj.setHours(23, 59, 59, 999);
+            // Compare by Month strings (YYYY-MM) instead of Date objects to prevent timezone drops
+            const startMonth = startDate.slice(0, 7); 
+            const endMonth = endDateStr.slice(0, 7);
 
-             validPayments = stallPayments.filter(p => {
-               if (!p.month_covered) return false;
-               const baseMonth = String(p.month_covered).replace('-partial', '');
-               const pDate = new Date(baseMonth);
-               return pDate >= startObj && pDate <= endObj;
-             });
+            validPayments = stallPayments.filter(p => {
+              if (!p.month_covered) return false;
+              const baseMonth = String(p.month_covered).replace('-partial', '').slice(0, 7);
+              
+              return baseMonth >= startMonth && baseMonth <= endMonth;
+            });
           } else {
-             validPayments = stallPayments;
+            validPayments = stallPayments;
           }
 
+          // Calculate totals
           const paidTotal = validPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
           const remainingTotal = validPayments.filter(p => p.status !== 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
 
@@ -124,7 +128,19 @@ export default function Contracts() {
       .eq('stall_id', contract.stall_id)
       .order('month_covered', { ascending: true });
 
-    if (data) setContractDetails(data);
+    // Filter to this contract's period only
+    const start = contract.start_date ? contract.start_date.slice(0, 7) : null;
+    const end = contract.end_date ? contract.end_date.slice(0, 7) : null;
+
+    const filtered = (data || []).filter(p => {
+      if (!p.month_covered) return false;
+      const base = String(p.month_covered).replace('-partial', '').slice(0, 7);
+      if (start && base < start) return false;
+      if (end && base > end) return false;
+      return true;
+    });
+
+    setContractDetails(filtered);
   };
 
   const handleExtendContract = async () => {
@@ -217,13 +233,15 @@ export default function Contracts() {
       if (payAll && newPayments.length > 0) {
         const todayStr = new Date().toISOString().split('T')[0];
         const monthsToPay = newPayments.map(p => p.month_covered);
+        // One shared receipt number for the whole batch
+        const sharedReceipt = `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 100000)}`;
 
         await supabase.from('payments')
           .update({
             status: 'Paid',
             payment_date: todayStr,
             penalty: 0,
-            receipt_number: `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 10000)}`
+            receipt_number: sharedReceipt
           })
           .eq('stall_id', selectedContract.stall_id)
           .eq('status', 'Pending')
@@ -295,6 +313,21 @@ export default function Contracts() {
     setIsActionLoading(true);
 
     try {
+      let previousEndDate: string | null = null;
+
+      if (!selectedContract.id.toString().startsWith('temp-')) {
+        const { data: extensions } = await supabase
+          .from('contract_extensions')
+          .select('*')
+          .eq('contract_id', selectedContract.id)
+          .order('id', { ascending: false })
+          .limit(1);
+
+        if (extensions && extensions.length > 0) {
+          previousEndDate = extensions[0].previous_end_date;
+        }
+      }
+
       const { data: partialPaids } = await supabase
         .from('payments')
         .select('*')
@@ -327,25 +360,35 @@ export default function Contracts() {
         }
       }
 
-      await supabase.from('payments').delete()
-        .eq('stall_id', selectedContract.stall_id)
-        .or('status.eq.Pending,receipt_number.like.PAY-%');
+      if (previousEndDate) {
+        const prevEndMonth = previousEndDate.slice(0, 7) + '-01';
+        await supabase.from('payments').delete()
+          .eq('stall_id', selectedContract.stall_id)
+          .gt('month_covered', prevEndMonth)
+          .or('status.eq.Pending,receipt_number.like.PAY-%');
+      } else {
+        await supabase.from('payments').delete()
+          .eq('stall_id', selectedContract.stall_id)
+          .or('status.eq.Pending,receipt_number.like.PAY-%');
+      }
 
       if (!selectedContract.id.toString().startsWith('temp-')) {
-        const { data: extensions } = await supabase
-          .from('contract_extensions')
-          .select('*')
-          .eq('contract_id', selectedContract.id)
-          .order('id', { ascending: false })
-          .limit(1);
+        if (previousEndDate) {
+          const { data: extensions } = await supabase
+            .from('contract_extensions')
+            .select('*')
+            .eq('contract_id', selectedContract.id)
+            .order('id', { ascending: false })
+            .limit(1);
 
-        if (extensions && extensions.length > 0) {
-          const lastExt = extensions[0];
-          await supabase.from('contract_extensions').delete().eq('id', lastExt.id);
-          await supabase.from('contracts').update({
-            end_date: lastExt.previous_end_date,
-            status: lastExt.previous_end_date < new Date().toISOString().split('T')[0] ? 'Expired' : 'Active'
-          }).eq('id', selectedContract.id);
+          if (extensions && extensions.length > 0) {
+            const lastExt = extensions[0];
+            await supabase.from('contract_extensions').delete().eq('id', lastExt.id);
+            await supabase.from('contracts').update({
+              end_date: lastExt.previous_end_date,
+              status: lastExt.previous_end_date < new Date().toISOString().split('T')[0] ? 'Expired' : 'Active'
+            }).eq('id', selectedContract.id);
+          }
         } else {
           await supabase.from('contracts').delete().eq('id', selectedContract.id);
         }
@@ -384,6 +427,7 @@ export default function Contracts() {
     try {
       const todayStr = new Date().toISOString().split('T')[0];
       let remainingMonths = payMonths;
+      const sharedReceiptNum = `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 100000)}`;
 
       const { data: unpaidBills } = await supabase
         .from('payments')
@@ -397,16 +441,14 @@ export default function Contracts() {
         return;
       }
 
-      const contractStart = selectedContract.start_date ? new Date(selectedContract.start_date) : null;
-      const contractEnd = selectedContract.end_date ? new Date(selectedContract.end_date) : null;
-      if (contractEnd) contractEnd.setHours(23, 59, 59, 999);
+      const contractStart = selectedContract.start_date ? selectedContract.start_date.slice(0, 7) : null;
+      const contractEnd = selectedContract.end_date ? selectedContract.end_date.slice(0, 7) : null;
 
       const relevantBills = unpaidBills.filter(b => {
         if (!b.month_covered) return false;
-        const baseMonth = String(b.month_covered).replace('-partial', '');
-        const d = new Date(baseMonth);
-        if (contractStart && d < contractStart) return false;
-        if (contractEnd && d > contractEnd) return false;
+        const baseMonth = String(b.month_covered).replace('-partial', '').slice(0, 7);
+        if (contractStart && baseMonth < contractStart) return false;
+        if (contractEnd && baseMonth > contractEnd) return false;
         return true;
       });
 
@@ -417,17 +459,16 @@ export default function Contracts() {
 
       for (const bill of relevantBills) {
         if (remainingMonths <= 0) break;
-        
+
         if (String(bill.month_covered).includes('-partial')) continue;
 
-        const receiptNum = `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 100000)}`;
         const penaltyAmount = bill.status === 'Overdue' ? bill.penalty : 0;
 
         await supabase.from('payments').update({
           status: 'Paid',
           payment_date: todayStr,
           penalty: penaltyAmount,
-          receipt_number: receiptNum
+          receipt_number: sharedReceiptNum
         }).eq('id', bill.id);
 
         remainingMonths -= 1;
@@ -461,7 +502,9 @@ export default function Contracts() {
 
   const activeCount = contracts.filter(c => c.status === 'Active').length;
   const expiredCount = contracts.filter(c => c.status === 'Expired').length;
-  const totalOutstanding = contracts.reduce((sum, c) => sum + c.remaining_total, 0);
+  
+  const totalPaid = contracts.reduce((sum, c) => sum + c.paid_total, 0);
+  const totalBalance = contracts.reduce((sum, c) => sum + c.remaining_total, 0);
 
   const maxMonthsCanPay = selectedContract ? Math.floor(Number(selectedContract.remaining_total) / Number(selectedContract.monthly_rent)) : 0;
 
@@ -500,9 +543,23 @@ export default function Contracts() {
           <div className="metric-icon red"><i className="fa-solid fa-clock-rotate-left"></i></div>
           <div className="metric-data"><div className="metric-label">Expired</div><div className="metric-value">{expiredCount}</div></div>
         </div>
+        
+        {/* NEW: Total Paid Card */}
         <div className="metric-box">
-          <div className="metric-icon orange"><i className="fa-solid fa-coins"></i></div>
-          <div className="metric-data"><div className="metric-label">Outstanding</div><div className="metric-value">₱{totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div></div>
+          <div className="metric-icon" style={{ background: '#ecfdf5', color: '#059669' }}><i className="fa-solid fa-wallet"></i></div>
+          <div className="metric-data">
+            <div className="metric-label">Total Paid</div>
+            <div className="metric-value" style={{ color: '#059669' }}>₱{totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+          </div>
+        </div>
+
+        {/* RENAMED: Total Balance Card */}
+        <div className="metric-box">
+          <div className="metric-icon orange"><i className="fa-solid fa-scale-balanced"></i></div>
+          <div className="metric-data">
+            <div className="metric-label">Total Balance</div>
+            <div className="metric-value" style={{ color: '#dc2626' }}>₱{totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+          </div>
         </div>
       </div>
 
@@ -691,7 +748,7 @@ export default function Contracts() {
           <div className="modal-box" style={{ maxWidth: '440px' }}>
             <div className="modal-icon danger-icon"><i className="fa-solid fa-rotate-left"></i></div>
             <h3>Undo last extension?</h3>
-            <p>This will remove the most recent extension and delete <strong>PAY-</strong> and <strong>PENDING</strong> bills. Your initial <strong>REG-</strong> payment will be kept safe.</p>
+            <p>This will remove the most recent extension and delete <strong>PAY-</strong> and <strong>PENDING</strong> bills generated by that extension. Your initial <strong>REG-</strong> payment will be kept safe.</p>
             <div className="modal-details">
               <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
               <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
@@ -779,27 +836,50 @@ export default function Contracts() {
                     <th>Month Covered</th>
                     <th>Due Date</th>
                     <th>Amount</th>
+                    <th>Receipt #</th>
                     <th>Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {contractDetails.map(p => (
-                    <tr key={p.id}>
-                      <td>
-                        {new Date(String(p.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                        {String(p.month_covered).includes('-partial') && (
-                          <span style={{ fontSize: '10px', color: '#f97316', marginLeft: '6px', fontWeight: 600 }}>(Remainder)</span>
-                        )}
-                      </td>
-                      <td>{new Date(p.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                      <td>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      <td>
-                        <span className={`status-badge ${p.status.toLowerCase()}`}>
-                          {p.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {contractDetails.length === 0 ? (
+                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No payments recorded for this contract period.</td></tr>
+                  ) : (
+                    contractDetails.map(p => (
+                      <tr key={p.id}>
+                        <td>
+                          {p.month_covered
+                            ? new Date(String(p.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                            : '—'}
+                          {String(p.month_covered).includes('-partial') && (
+                            <span style={{ fontSize: '10px', color: '#f97316', marginLeft: '6px', fontWeight: 600 }}>(Remainder)</span>
+                          )}
+                        </td>
+                        <td>{p.due_date ? new Date(p.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+                        <td>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td>{p.receipt_number || '—'}</td>
+                        <td>
+                          <span className={`status-badge ${p.status.toLowerCase()}`}>
+                            {p.status}
+                          </span>
+                        </td>
+                        <td>
+                          {p.status === 'Paid' && p.receipt_number ? (
+                            <button
+                              className="btn-action"
+                              title="Print Receipt"
+                              onClick={() => navigate(`/receipt?id=${p.id}`)}
+                              style={{ color: '#3b82f6' }}
+                            >
+                              <i className="fa-solid fa-print"></i>
+                            </button>
+                          ) : (
+                            <span style={{ color: '#cbd5e1' }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
