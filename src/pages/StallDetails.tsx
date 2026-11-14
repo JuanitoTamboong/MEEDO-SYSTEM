@@ -27,12 +27,16 @@ export default function StallDetails() {
   const [vacateModalOpen, setVacateModalOpen] = useState(false);
   const [deletePaymentModalOpen, setDeletePaymentModalOpen] = useState(false);
   const [payBalanceModalOpen, setPayBalanceModalOpen] = useState(false);
+  const [editReceiptModalOpen, setEditReceiptModalOpen] = useState(false);
 
   const [selectedPaymentToDelete, setSelectedPaymentToDelete] = useState<any>(null);
+  const [editingPayment, setEditingPayment] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   const [payMonths, setPayMonths] = useState(1);
+  const [orNumber, setOrNumber] = useState('');
+  const [editOrNumber, setEditOrNumber] = useState('');
 
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -253,8 +257,88 @@ export default function StallDetails() {
     }
   };
 
+  const handleEditReceipt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPayment) return;
+
+    const trimmedOr = editOrNumber.trim();
+    if (!trimmedOr || !/^\d+$/.test(trimmedOr)) {
+      setPermissionMessage("Receipt number must contain numbers only.");
+      setShowPermissionPopup(true);
+      return;
+    }
+
+    setIsActionLoading(true);
+    try {
+      // 🛑 CHECK: Is this OR number already used by ANOTHER tenant?
+      const { data: existingOr } = await supabase
+        .from('payments')
+        .select('stall_id')
+        .eq('receipt_number', trimmedOr)
+        .neq('stall_id', stall.id)
+        .limit(1);
+
+      if (existingOr && existingOr.length > 0) {
+        setPermissionMessage(`Receipt number ${trimmedOr} is already used by another tenant. Please enter a unique OR.`);
+        setShowPermissionPopup(true);
+        setIsActionLoading(false);
+        return;
+      }
+
+      if (editingPayment.ids && editingPayment.ids.length > 1) {
+        // Grouped receipt: update all months in the group
+        const { error } = await supabase
+          .from('payments')
+          .update({ receipt_number: trimmedOr })
+          .eq('stall_id', stall.id)
+          .eq('receipt_number', editingPayment.receipt_number || '');
+        if (error) throw error;
+      } else {
+        // Single receipt: update just this specific ID
+        const paymentId = editingPayment.id || (editingPayment.ids && editingPayment.ids[0]);
+        
+        if (!paymentId) throw new Error("Payment ID is missing.");
+
+        const { error } = await supabase
+          .from('payments')
+          .update({ receipt_number: trimmedOr })
+          .eq('id', paymentId);
+        if (error) throw error;
+      }
+
+      await recordAuditLog(
+        'Edit Receipt Number',
+        `Changed receipt number from ${editingPayment.receipt_number || 'Blank'} to ${trimmedOr} for tenant ${tenant?.full_name}.`,
+        'Payment',
+        editingPayment.id || (editingPayment.ids && editingPayment.ids[0])
+      );
+
+      setEditReceiptModalOpen(false);
+      setEditingPayment(null);
+      setSuccessMessage(`Receipt number successfully updated to ${trimmedOr}.`);
+      setIsVacateSuccess(false);
+      setShowSuccessPopup(true);
+      fetchData();
+
+    } catch (err: any) {
+      alert("Error updating receipt: " + err.message);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
   const handlePayBalance = async () => {
     if (!stall) return;
+
+    const trimmedOr = orNumber.trim();
+    if (!trimmedOr) {
+      setErrorMsg("Please enter the Official Receipt number.");
+      return;
+    }
+    if (!/^\d+$/.test(trimmedOr)) {
+      setErrorMsg("Receipt number must contain numbers only (e.g., 000851).");
+      return;
+    }
 
     const monthlyRent = Number(stall.monthly_rent);
     const amountToPay = payMonths * monthlyRent;
@@ -266,14 +350,25 @@ export default function StallDetails() {
 
     setIsActionLoading(true);
     try {
+      // 🛑 CHECK: Is this OR number already used by ANOTHER tenant?
+      const { data: existingOr } = await supabase
+        .from('payments')
+        .select('stall_id')
+        .eq('receipt_number', trimmedOr)
+        .neq('stall_id', stall.id)
+        .limit(1);
+
+      if (existingOr && existingOr.length > 0) {
+        alert(`Receipt number ${trimmedOr} is already used by another tenant. Please enter a unique OR.`);
+        setIsActionLoading(false);
+        return;
+      }
+
       const todayStr = new Date().toISOString().split('T')[0];
       let remainingMonths = payMonths;
-      // Shared receipt for all bills paid in this batch
-      const sharedReceiptNum = `PAY-${todayStr.replace(/-/g, '')}-${Math.floor(Math.random() * 100000)}`;
 
       for (const bill of unpaidBills) {
         if (remainingMonths <= 0) break;
-
         if (String(bill.month_covered).includes('-partial')) continue;
 
         const penaltyAmount = bill.status === 'Overdue' ? bill.penalty : 0;
@@ -282,7 +377,7 @@ export default function StallDetails() {
           status: 'Paid',
           payment_date: todayStr,
           penalty: penaltyAmount,
-          receipt_number: sharedReceiptNum
+          receipt_number: trimmedOr
         }).eq('id', bill.id);
 
         remainingMonths -= 1;
@@ -290,12 +385,13 @@ export default function StallDetails() {
 
       await recordAuditLog(
         'Pay Balance',
-        `Paid for ${payMonths} month(s) (₱${amountToPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}) towards balance for ${tenant?.full_name}.`,
+        `Paid for ${payMonths} month(s) (₱${amountToPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}) towards balance for ${tenant?.full_name} (OR #${trimmedOr}).`,
         'Stall',
         stall.id
       );
 
       setPayBalanceModalOpen(false);
+      setOrNumber('');
       setSuccessMessage(`Payment for ${payMonths} month(s) (₱${amountToPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}) recorded successfully.`);
       setIsVacateSuccess(false);
       setShowSuccessPopup(true);
@@ -345,6 +441,7 @@ export default function StallDetails() {
   const handlePayBalanceClick = () => {
     if (userRole === 'Administrator' || userRole === 'Meedo Personnel' || userRole === 'Treasury') {
       setPayMonths(1);
+      setOrNumber('');
       setPayBalanceModalOpen(true);
     } else {
       setPermissionMessage("Only Administrators, Meedo Personnel, and Treasury can record payments.");
@@ -512,7 +609,7 @@ export default function StallDetails() {
         </div>
       )}
 
-      {/* 🛑 NEW: Outstanding Balances Table (Clean Design) */}
+      {/* 🛑 Unpaid Balances Table */}
       {unpaidBills.length > 0 && (
         <div className="data-panel" style={{ marginBottom: '24px' }}>
           <div className="data-header">
@@ -526,28 +623,73 @@ export default function StallDetails() {
               <thead>
                 <tr>
                   <th>Month Covered</th>
-                  <th>Due Date</th>
+                  <th>Coverage Period</th>
                   <th>Amount</th>
                   <th>Status</th>
                   <th>Penalty</th>
                   <th>Total Due</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {unpaidBills.map(bill => (
-                  <tr key={bill.id}>
-                    <td><strong>{new Date(String(bill.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong></td>
-                    <td>{new Date(bill.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                    <td>₱{Number(bill.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td>
-                      <span className={`status-badge ${bill.status.toLowerCase()}`}>{bill.status}</span>
-                    </td>
-                    <td style={{ color: bill.penalty > 0 ? '#dc2626' : 'inherit' }}>
-                      {bill.penalty > 0 ? `+ ₱${Number(bill.penalty).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
-                    </td>
-                    <td><strong style={{ color: '#dc2626' }}>₱{Number(bill.total_due).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
-                  </tr>
-                ))}
+                {unpaidBills.map(bill => {
+                  // Calculate Coverage Period
+                  let coverageDisplay = '—';
+                  if (bill.month_covered && tenant?.registration_date) {
+                    const regDate = new Date(tenant.registration_date);
+                    const fixedDay = regDate.getDate();
+                    
+                    const startObj = new Date(bill.month_covered);
+                    startObj.setDate(fixedDay);
+                    
+                    const endObj = new Date(startObj);
+                    endObj.setMonth(endObj.getMonth() + 1);
+                    
+                    if (endObj.getDate() !== fixedDay) {
+                       endObj.setDate(0); // Handle months with fewer days
+                    }
+                    
+                    coverageDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+                  }
+
+                  return (
+                    <tr key={bill.id}>
+                      <td><strong>{new Date(String(bill.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</strong></td>
+                      <td style={{ color: '#64748b', fontSize: '12px' }}>{coverageDisplay}</td>
+                      <td>₱{Number(bill.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td>
+                        <span className={`status-badge ${bill.status.toLowerCase()}`}>{bill.status}</span>
+                      </td>
+                      <td style={{ color: bill.penalty > 0 ? '#dc2626' : 'inherit' }}>
+                        {bill.penalty > 0 ? `+ ₱${Number(bill.penalty).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td><strong style={{ color: '#dc2626' }}>₱{Number(bill.total_due).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          {bill.status === 'Overdue' ? (
+                            <button
+                              className="btn-action"
+                              title="Send Overdue Notice"
+                              onClick={() => navigate(`/send-notice?payment=${bill.id}`)}
+                              style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }}
+                            >
+                              <i className="fa-solid fa-bell"></i>
+                            </button>
+                          ) : (
+                            <button
+                              className="btn-action"
+                              title="Send Reminder"
+                              onClick={() => navigate(`/send-reminder?stall=${stall.id}`)}
+                              style={{ color: '#f59e0b', borderColor: '#fde68a', background: '#fffbeb' }}
+                            >
+                              <i className="fa-solid fa-envelope"></i>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -564,7 +706,7 @@ export default function StallDetails() {
                   <th>Date Paid</th>
                   <th>Amount</th>
                   <th>Receipt #</th>
-                  <th>Month Covered</th>
+                  <th>Coverage Period</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -573,9 +715,31 @@ export default function StallDetails() {
                 {groupedReceipts.map((group: any) => {
                   const key = group.receipt_number || `solo-${group.ids[0]}`;
                   const isExpanded = expandedReceipts.has(key);
-                  const monthLabels = group.months.map((m: any) =>
-                    m ? new Date(String(m).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'
-                  );
+                  
+                  // Calculate Coverage Display for the group
+                  let groupCoverageDisplay = '—';
+                  if (group.months && group.months.length > 0 && tenant?.registration_date) {
+                    const regDate = new Date(tenant.registration_date);
+                    const fixedDay = regDate.getDate();
+                    
+                    const startObj = new Date(group.months[0]);
+                    startObj.setDate(fixedDay);
+                    
+                    const lastMonth = new Date(group.months[group.months.length - 1]);
+                    const endObj = new Date(lastMonth);
+                    endObj.setDate(fixedDay);
+                    endObj.setMonth(endObj.getMonth() + 1);
+                    
+                    if (endObj.getDate() !== fixedDay) {
+                       endObj.setDate(0);
+                    }
+                    
+                    if (group.months.length > 1) {
+                      groupCoverageDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+                    } else {
+                      groupCoverageDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+                    }
+                  }
 
                   return (
                     <React.Fragment key={key}>
@@ -587,15 +751,30 @@ export default function StallDetails() {
                           {group.ids.length > 1 ? (
                             <>
                               <i className={`fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}`} style={{ marginRight: '6px', fontSize: '11px' }}></i>
-                              {monthLabels.join(', ')}
+                              {groupCoverageDisplay}
                             </>
                           ) : (
-                            monthLabels[0]
+                            groupCoverageDisplay
                           )}
                         </td>
                         <td><span className={`status-badge ${group.status?.toLowerCase() || 'paid'}`}>{group.status || 'Paid'}</span></td>
                         <td>
                           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                            
+                            <button
+                              className="btn-action"
+                              title="Edit Receipt Number"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingPayment(group);
+                                setEditOrNumber(group.receipt_number || '');
+                                setEditReceiptModalOpen(true);
+                              }}
+                              style={{ color: '#f59e0b' }}
+                            >
+                              <i className="fa-solid fa-pen"></i>
+                            </button>
+
                             <button
                               className="btn-action"
                               title="Print Receipt"
@@ -616,13 +795,11 @@ export default function StallDetails() {
                               title={group.ids.length > 1 ? "Delete full receipt" : "Delete Payment"}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                // For single payments, keep existing modal flow
                                 if (group.ids.length === 1) {
                                   const p = paymentHistory.find((x: any) => x.id === group.ids[0]);
                                   setSelectedPaymentToDelete(p);
                                   setDeletePaymentModalOpen(true);
                                 } else {
-                                  // Grouped: open modal for first item, or handle separately
                                   const p = paymentHistory.find((x: any) => x.id === group.ids[0]);
                                   setSelectedPaymentToDelete(p);
                                   setDeletePaymentModalOpen(true);
@@ -639,15 +816,51 @@ export default function StallDetails() {
                         group.ids.map((id: number) => {
                           const p = paymentHistory.find((x: any) => x.id === id);
                           if (!p) return null;
+                          
+                          // Calculate individual coverage display
+                          let individualCoverageDisplay = '—';
+                          if (p.month_covered && tenant?.registration_date) {
+                            const regDate = new Date(tenant.registration_date);
+                            const fixedDay = regDate.getDate();
+                            
+                            const startObj = new Date(p.month_covered);
+                            startObj.setDate(fixedDay);
+                            
+                            const endObj = new Date(startObj);
+                            endObj.setMonth(endObj.getMonth() + 1);
+                            
+                            if (endObj.getDate() !== fixedDay) {
+                               endObj.setDate(0); 
+                            }
+                            
+                            individualCoverageDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+                          }
+
                           return (
                             <tr key={`child-${id}`} style={{ background: '#f8fafc', fontSize: '12px' }}>
                               <td style={{ paddingLeft: '32px' }}>{p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
                               <td>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                               <td>{p.receipt_number || '—'}</td>
-                              <td>{p.month_covered ? new Date(String(p.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}</td>
+                              <td>{individualCoverageDisplay}</td>
                               <td><span className={`status-badge ${p.status?.toLowerCase() || 'paid'}`}>{p.status || 'Paid'}</span></td>
                               <td>
                                 <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                                  
+                                  {/* 🛑 EDIT INDIVIDUAL RECEIPT */}
+                                  <button
+                                    className="btn-action"
+                                    title="Edit this month's OR"
+                                    onClick={() => {
+                                      setEditingPayment({ ...p, ids: [p.id] }); 
+                                      setEditOrNumber(p.receipt_number || '');
+                                      setEditReceiptModalOpen(true);
+                                    }}
+                                    style={{ color: '#f59e0b' }}
+                                  >
+                                    <i className="fa-solid fa-pen"></i>
+                                  </button>
+
+                                  {/* 🛑 PRINT INDIVIDUAL RECEIPT */}
                                   <button
                                     className="btn-action"
                                     title="Print this month"
@@ -749,6 +962,40 @@ export default function StallDetails() {
         </div>
       )}
 
+      {editReceiptModalOpen && editingPayment && (
+        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setEditReceiptModalOpen(false) }}>
+          <div className="modal-box" style={{ maxWidth: '400px' }}>
+            <div className="modal-icon info-icon"><i className="fa-solid fa-pen"></i></div>
+            <h3>Edit Receipt Number</h3>
+            <p>Update the Official Receipt (OR) number if you made a typo.</p>
+            
+            <form onSubmit={handleEditReceipt}>
+              <div className="input-group" style={{ marginBottom: '20px', marginTop: '16px' }}>
+                <label>Official Receipt No. <span style={{ color: '#dc2626' }}>*</span></label>
+                <input
+                  type="text"
+                  value={editOrNumber}
+                  onChange={(e) => setEditOrNumber(e.target.value)}
+                  placeholder="e.g., 000851"
+                  autoComplete="off"
+                  maxLength={12}
+                  required
+                  style={{ padding: '12px', fontSize: '16px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-cancel" onClick={() => setEditReceiptModalOpen(false)} disabled={isActionLoading}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={isActionLoading || !editOrNumber.trim()}>
+                  {isActionLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {payBalanceModalOpen && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setPayBalanceModalOpen(false) }}>
           <div className="modal-box" style={{ maxWidth: '500px' }}>
@@ -791,6 +1038,22 @@ export default function StallDetails() {
               </select>
             </div>
 
+            <div className="input-group" style={{ marginBottom: '16px' }}>
+              <label>Official Receipt No. <span style={{ color: '#dc2626' }}>*</span></label>
+              <input
+                type="text"
+                value={orNumber}
+                onChange={(e) => setOrNumber(e.target.value)}
+                placeholder="e.g., 000851"
+                autoComplete="off"
+                maxLength={12}
+                style={{ padding: '12px', fontSize: '16px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+              />
+              <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                Type the OR number exactly as written on the physical receipt.
+              </small>
+            </div>
+
             <div className="modal-actions">
               <button className="btn-cancel" onClick={() => setPayBalanceModalOpen(false)} disabled={isActionLoading}>
                 Cancel
@@ -799,7 +1062,7 @@ export default function StallDetails() {
                 className="btn-primary"
                 style={{ background: '#059669', borderColor: '#059669', flex: 1, marginLeft: '8px' }}
                 onClick={handlePayBalance}
-                disabled={isActionLoading || maxMonthsCanPay === 0}
+                disabled={isActionLoading || maxMonthsCanPay === 0 || !orNumber.trim()}
               >
                 {isActionLoading ? 'Processing...' : `Pay ₱${(payMonths * Number(stall.monthly_rent)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               </button>
