@@ -148,19 +148,6 @@ export default function ManageStalls() {
     fetchData();
   };
 
-  const moveSection = async (id: number, currentOrder: number, direction: 'up' | 'down') => {
-    const targetOrder = direction === 'up' ? currentOrder - 1 : currentOrder + 1;
-    const targetSection = sections.find(s => s.display_order === targetOrder);
-
-    if (targetSection) {
-      // Swap orders
-      await supabase.from('sections').update({ display_order: targetOrder }).eq('id', id);
-      await supabase.from('sections').update({ display_order: currentOrder }).eq('id', targetSection.id);
-      await recordAuditLog('Move Section', `Moved section #${id} ${direction}.`, 'Section', id);
-      fetchData();
-    }
-  };
-
   return (
     <div className="content-wrapper">
       
@@ -290,9 +277,6 @@ export default function ManageStalls() {
                     </div>
                   </div>
                   <div className="section-controls">
-                    <button className="btn-control" onClick={() => moveSection(section.id, section.display_order, 'up')}><i className="fa-solid fa-arrow-up"></i></button>
-                    <button className="btn-control" onClick={() => moveSection(section.id, section.display_order, 'down')}><i className="fa-solid fa-arrow-down"></i></button>
-                    <div className="divider"></div>
                     <button 
                       className="btn-control danger" 
                       onClick={() => setConfirmModal({ isOpen: true, type: 'section', id: section.id, name: section.section_name, extra: `${sectionStalls.length} stalls will also be deleted.` })}
