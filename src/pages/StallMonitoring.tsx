@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-// Adjust this import path to match your actual supabase client location
 import { supabase } from '../supabase/lib/supabase';
 import '../css/stall-monitoring.css';
 
@@ -24,6 +23,7 @@ interface OverduePayment {
   amount: number;
   due_date: string;
   penalty: number;
+  grace_period_days: number; // 🛑 ADDED THIS
 }
 
 export default function StallMonitoring() {
@@ -176,7 +176,8 @@ export default function StallMonitoring() {
           section_name: section?.section_name || null,
           amount: payment.amount,
           due_date: payment.due_date,
-          penalty: payment.penalty || 0
+          penalty: payment.penalty || 0,
+          grace_period_days: payment.grace_period_days || 3 // 🛑 SAVED TO STATE
         };
       });
 
@@ -500,7 +501,8 @@ export default function StallMonitoring() {
               <tbody>
                 {overdueList.map((overdue) => {
                   const dueDate = new Date(overdue.due_date);
-                  const graceDays = 3;
+                  // 🛑 FIX: Use the exact grace period from the database
+                  const graceDays = overdue.grace_period_days; 
 
                   const penaltyStartDate = new Date(dueDate);
                   penaltyStartDate.setDate(

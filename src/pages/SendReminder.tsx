@@ -66,15 +66,31 @@ export default function SendReminder() {
   const tenantName = tenant?.full_name || stall?.tenant_name || 'Valued Tenant';
   const stallNumber = stall?.stall_number || '';
   const monthlyRent = payment?.amount || stall?.monthly_rent || 0;
-  const dueDate = payment?.due_date || new Date().toISOString().split('T')[0];
   const contactNumber = tenant?.contact_number || '';
+  
+  // Calculate Coverage Period dynamically based on the specific bill's due date
+  let coveragePeriod = 'N/A';
+  
+  if (payment?.due_date) {
+    const startObj = new Date(payment.due_date);
+    const endObj = new Date(startObj);
+    endObj.setMonth(endObj.getMonth() + 1);
+    
+    // Handle months with fewer days (e.g., Jan 31 -> Feb 28)
+    if (endObj.getDate() !== startObj.getDate()) {
+      endObj.setDate(0);
+    }
+
+    coveragePeriod = `${startObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} to ${endObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+  }
 
   // Format WhatsApp Number
   let waNumber = contactNumber.replace(/\D/g, '');
   if (waNumber.length === 10 && waNumber.startsWith('9')) waNumber = '63' + waNumber;
   if (waNumber.length === 11 && waNumber.startsWith('0')) waNumber = '63' + waNumber.substring(1);
 
-  const message = `Dear ${tenantName},\n\nThis is a friendly reminder from MEEDO - Odiongan Public Market that your monthly stall rental for Stall ${stallNumber} is due.\n\nAmount Due: PHP ${Number(monthlyRent).toLocaleString(undefined, {minimumFractionDigits: 2})}\nDue Date: ${new Date(dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}\n\nPlease settle your payment at the market office before the due date to avoid penalties.\n\nThank you for your continued support!\n\n- MEEDO Management`;
+  // Added the coverage period to the message
+  const message = `Dear ${tenantName},\n\nThis is a friendly reminder from MEEDO - Odiongan Public Market that your monthly stall rental for Stall ${stallNumber} is due.\n\nCoverage Period: ${coveragePeriod}\nAmount Due: PHP ${Number(monthlyRent).toLocaleString(undefined, {minimumFractionDigits: 2})}\n\nPlease settle your payment at the market office before the due date to avoid penalties.\n\nThank you for your continued support!\n\n- MEEDO Management`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message);
@@ -135,8 +151,8 @@ export default function SendReminder() {
         <div className="info-grid">
           <div className="info-item"><span className="label">Tenant</span><span className="value">{tenantName}</span></div>
           <div className="info-item"><span className="label">Stall #</span><span className="value">{stallNumber}</span></div>
+          <div className="info-item" style={{ gridColumn: 'span 2' }}><span className="label">Coverage Period</span><span className="value">{coveragePeriod}</span></div>
           <div className="info-item"><span className="label">Amount Due</span><span className="value">₱{Number(monthlyRent).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-          <div className="info-item"><span className="label">Due Date</span><span className="value">{new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
           <div className="info-item"><span className="label">Contact</span><span className="value">{contactNumber || '—'}</span></div>
         </div>
 

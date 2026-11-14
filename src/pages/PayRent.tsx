@@ -12,11 +12,15 @@ export default function PayRent() {
   const [stall, setStall] = useState<any>(null);
   const [payment, setPayment] = useState<any>(null);
   const [tenantName, setTenantName] = useState('Tenant');
+  const [registrationDate, setRegistrationDate] = useState<string | null>(null);
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // New state for manual Official Receipt Number
+  const [orNumber, setOrNumber] = useState('');
 
   useEffect(() => {
     if (!stallId) {
@@ -37,11 +41,13 @@ export default function PayRent() {
       }
       setStall(stallData);
 
+      // Fetch tenant and get their registration date for the billing cycle
       const { data: tenantData } = await supabase
-        .from('tenants').select('full_name').eq('stall_id', stallId).eq('status', 'active').maybeSingle();
+        .from('tenants').select('full_name, registration_date').eq('stall_id', stallId).eq('status', 'active').maybeSingle();
       
       const name = tenantData?.full_name || stallData.tenant_name || 'Tenant';
       setTenantName(name);
+      setRegistrationDate(tenantData?.registration_date || null);
 
       // --- 🛑 STRICT MONTH CHECK 🛑 ---
       const today = new Date();
@@ -107,6 +113,17 @@ export default function PayRent() {
   const handleConfirmPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+
+    // 1. Validate Manual OR Input
+    const trimmedOr = orNumber.trim();
+    if (!trimmedOr) {
+      setErrorMsg('Please enter the official receipt number from the treasury.');
+      return;
+    }
+    if (!/^\d+$/.test(trimmedOr)) {
+      setErrorMsg('Receipt number must contain numbers only (e.g., 000851).');
+      return;
+    }
     
     setIsSubmitting(true);
     setErrorMsg('');
@@ -115,22 +132,20 @@ export default function PayRent() {
       const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
 
-      const receiptNumber = `PAY-${todayStr.replace(/-/g, '')}-${payment.id}`;
-
-      // 1. Mark payment as PAID
+      // 2. Mark payment as PAID with manual OR
       const { error: updateError } = await supabase
         .from('payments')
         .update({ 
           status: 'Paid', 
           payment_date: todayStr, 
           penalty: 0,
-          receipt_number: receiptNumber
+          receipt_number: trimmedOr // Save manual OR here
         })
         .eq('id', payment.id);
 
       if (updateError) throw updateError;
 
-      // 2. Generate NEXT month payment
+      // 3. Generate NEXT month payment
       const currentDueDate = new Date(payment.due_date);
       const nextMonthDate = new Date(currentDueDate);
       nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
@@ -150,10 +165,10 @@ export default function PayRent() {
 
       if (upsertError) throw upsertError;
 
-      // 3. Audit Log
+      // 4. Audit Log
       await recordAuditLog(
         'Record Rent Payment', 
-        `Recorded rent payment of ₱${payment.amount.toLocaleString(undefined, {minimumFractionDigits: 2})} for stall '${stall.stall_number}'.`, 
+        `Recorded rent payment of ₱${payment.amount.toLocaleString(undefined, {minimumFractionDigits: 2})} for stall '${stall.stall_number}' (OR #${trimmedOr}).`, 
         'Payment', 
         payment.id
       );
@@ -181,6 +196,23 @@ export default function PayRent() {
         </div>
       </div>
     );
+  }
+
+  // Calculate Coverage Period
+  let coveragePeriod = '—';
+  if (payment?.month_covered) {
+    const fixedDay = registrationDate ? new Date(registrationDate).getDate() : new Date(payment.month_covered).getDate();
+    
+    const startObj = new Date(String(payment.month_covered).replace('-partial', ''));
+    startObj.setDate(fixedDay);
+    
+    const endObj = new Date(startObj);
+    endObj.setMonth(endObj.getMonth() + 1);
+    if (endObj.getDate() !== fixedDay) {
+      endObj.setDate(0);
+    }
+
+    coveragePeriod = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
   }
 
   return (
@@ -219,10 +251,8 @@ export default function PayRent() {
                   <span className="summary-value">{stall.stall_number}</span>
                 </div>
                 <div className="summary-row">
-                  <span className="summary-label">Month Covered</span>
-                  <span className="summary-value">
-                    {new Date(payment.month_covered).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  </span>
+                  <span className="summary-label">Coverage Period</span>
+                  <span className="summary-value">{coveragePeriod}</span>
                 </div>
                 <div className="summary-row highlight">
                   <span className="summary-label">Amount Due</span>
@@ -243,9 +273,27 @@ export default function PayRent() {
                   <input type="text" value={new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} readOnly />
                 </div>
 
+                {/* NEW MANUAL OR INPUT FIELD */}
+                <div className="input-group">
+                  <label>Official Receipt No. <span style={{ color: '#dc2626' }}>*</span></label>
+                  <input 
+                    type="text" 
+                    value={orNumber} 
+                    onChange={(e) => setOrNumber(e.target.value)} 
+                    placeholder="e.g., 000851" 
+                    autoComplete="off"
+                    maxLength={12}
+                  />
+                  <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                    Type the OR number exactly as written on the physical receipt.
+                  </small>
+                </div>
+
                 <div className="form-actions">
                   <Link to={`/stall-details?stall=${stall.stall_number}`} className="btn-outline">Cancel</Link>
-                  <button type="submit" className="btn-primary" disabled={isSubmitting}>
+                  
+                  {/* DISABLE BUTTON IF OR IS EMPTY */}
+                  <button type="submit" className="btn-primary" disabled={isSubmitting || !orNumber.trim()}>
                     <i className="fa-solid fa-check"></i> {isSubmitting ? 'Processing...' : 'Confirm Payment'}
                   </button>
                 </div>

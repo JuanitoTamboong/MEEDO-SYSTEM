@@ -1,6 +1,33 @@
-/* ============================================================
-   CONTRACTS PAGE STYLES
-   ============================================================ */
+
+.input-with-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.input-with-icon i {
+    position: absolute;
+    left: 12px;
+    color: #829087;
+    font-size: 14px;
+    pointer-events: none; /* Allows clicking through the icon to focus the input */
+}
+
+.input-with-icon input {
+    padding-left: 36px !important; /* Pushes the text to the right of the icon */
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-right: 12px;
+    border: 1px solid #d6dfd8;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.input-with-icon input:focus {
+    border-color: #217346;
+}
 
 /* 1. Main Container & Table Wrapper */
 .data-panel {
@@ -211,7 +238,7 @@
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap !important;
-    flex-shrink: 0; /* Prevents buttons from being squished */
+    flex-shrink: 0;
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
@@ -266,8 +293,8 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    width: 100%; /* Removed !important */
-    max-width: 1100px; /* Removed !important */
+    width: 100%;
+    max-width: 1100px;
     max-height: calc(100vh - 40px) !important;
     margin: auto !important;
     padding: 28px !important;

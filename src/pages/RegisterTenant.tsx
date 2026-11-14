@@ -8,6 +8,8 @@ interface AvailableStall {
   id: number;
   stall_number: string;
   section_id: number;
+  section_name?: string;
+  icon_class?: string;
   monthly_rent: number;
 }
 
@@ -27,6 +29,7 @@ export default function RegisterTenant() {
     business_name: ''
   });
 
+  const [orNumber, setOrNumber] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -58,11 +61,30 @@ export default function RegisterTenant() {
 
       const { data: stallsData } = await supabase
         .from('stalls')
-        .select('id, stall_number, section_id, monthly_rent')
+        .select(`
+          id, 
+          stall_number, 
+          section_id, 
+          monthly_rent,
+          sections (
+            section_name,
+            icon_class
+          )
+        `)
         .eq('status', 'Vacant')
         .order('stall_number', { ascending: true });
       
-      if (stallsData) setAvailableStalls(stallsData);
+      if (stallsData) {
+        const formattedStalls = stallsData.map((s: any) => ({
+          id: s.id,
+          stall_number: s.stall_number,
+          section_id: s.section_id,
+          monthly_rent: s.monthly_rent,
+          section_name: s.sections?.section_name || 'Unassigned',
+          icon_class: s.sections?.icon_class || 'fa-store'
+        }));
+        setAvailableStalls(formattedStalls);
+      }
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -79,6 +101,18 @@ export default function RegisterTenant() {
     setIsSubmitting(true);
     setErrorMsg('');
     setSuccessMsg('');
+
+    const trimmedOr = orNumber.trim();
+    if (!trimmedOr) {
+      setErrorMsg('Please enter the official receipt number from the treasury.');
+      setIsSubmitting(false);
+      return;
+    }
+    if (!/^\d+$/.test(trimmedOr)) {
+      setErrorMsg('Receipt number must contain numbers only.');
+      setIsSubmitting(false);
+      return;
+    }
 
     if (!formData.full_name || !formData.contact_number || !formData.stall_id || !formData.business_name) {
       setErrorMsg("Please fill in all required fields.");
@@ -100,6 +134,18 @@ export default function RegisterTenant() {
 
       const selectedStall = availableStalls.find(s => s.id === Number(formData.stall_id));
       if (!selectedStall) throw new Error("Selected stall is no longer available.");
+
+      // 🛑 CHECK: Is this OR number already used by ANOTHER tenant?
+      const { data: existingOr } = await supabase
+        .from('payments')
+        .select('stall_id')
+        .eq('receipt_number', trimmedOr)
+        .neq('stall_id', selectedStall.id)
+        .limit(1);
+
+      if (existingOr && existingOr.length > 0) {
+        throw new Error(`Receipt number ${trimmedOr} is already used by another tenant. Please enter a unique OR.`);
+      }
 
       const today = new Date(); 
       const todayString = today.toISOString().split('T')[0];
@@ -128,26 +174,21 @@ export default function RegisterTenant() {
         .update({ status: 'Occupied', tenant_name: formData.full_name.trim() })
         .eq('id', selectedStall.id);
 
-      // 🛑 FIX: The due date is the same day they registered (e.g., Nov 13)
-      const dueDateString = todayString; 
-
-      const receiptNumber = `REG-${todayString.replace(/-/g, '')}-${tenantData.id}`;
-
+      // Insert initial payment (grace_period_days is handled by SQL default)
       await supabase.from('payments').insert([{
         stall_id: selectedStall.id,
         tenant_name: formData.full_name.trim(),
         amount: selectedStall.monthly_rent,
         payment_date: todayString,
-        due_date: dueDateString, // 🛑 FIXED: Due in the same month
+        due_date: todayString,
         month_covered: `${todayString.slice(0, 7)}-01`, 
         status: 'Paid',
-        receipt_number: receiptNumber,
-        grace_period_days: 3
+        receipt_number: trimmedOr
       }]);
 
       await recordAuditLog(
         'Register Tenant', 
-        `Registered tenant '${formData.full_name}' to stall '${selectedStall.stall_number}'.`, 
+        `Registered tenant '${formData.full_name}' to stall '${selectedStall.stall_number}' (OR #${trimmedOr}).`, 
         'Tenant', 
         tenantData.id
       );
@@ -155,6 +196,7 @@ export default function RegisterTenant() {
       setSuccessMsg(`Tenant ${formData.full_name} registered successfully!`);
       
       setFormData({ full_name: '', date_of_birth: '', contact_number: '', street: '', barangay: '', city: '', stall_id: '', business_name: '' });
+      setOrNumber('');
       
       fetchData(); 
 
@@ -164,6 +206,8 @@ export default function RegisterTenant() {
       setIsSubmitting(false);
     }
   };
+
+  const selectedStallDetails = availableStalls.find(s => s.id === Number(formData.stall_id));
 
   if (isLoading) {
     return (
@@ -235,7 +279,7 @@ export default function RegisterTenant() {
               <div className="form-grid grid-3">
                 <div className="input-group">
                   <label>Full Name <span className="required">*</span></label>
-                  <input type="text" name="full_name" value={formData.full_name} onChange={handleChange} placeholder="e.g., Maria Clara Santos" required />
+                  <input type="text" name="full_name" value={formData.full_name} onChange={handleChange} placeholder="Full Name" required />
                 </div>
                 <div className="input-group">
                   <label>Date of Birth</label>
@@ -243,7 +287,7 @@ export default function RegisterTenant() {
                 </div>
                 <div className="input-group">
                   <label>Contact Number <span className="required">*</span></label>
-                  <input type="text" name="contact_number" value={formData.contact_number} onChange={handleChange} placeholder="e.g., 09123456789" required />
+                  <input type="text" name="contact_number" value={formData.contact_number} onChange={handleChange} placeholder="Contact Number" required />
                 </div>
               </div>
             </div>
@@ -256,15 +300,15 @@ export default function RegisterTenant() {
               <div className="form-grid grid-2">
                 <div className="input-group">
                   <label>Street / Purok</label>
-                  <input type="text" name="street" value={formData.street} onChange={handleChange} placeholder="e.g., 123 Main St." />
+                  <input type="text" name="street" value={formData.street} onChange={handleChange} placeholder="Street" />
                 </div>
                 <div className="input-group">
                   <label>Barangay</label>
-                  <input type="text" name="barangay" value={formData.barangay} onChange={handleChange} placeholder="e.g., Poblacion" />
+                  <input type="text" name="barangay" value={formData.barangay} onChange={handleChange} placeholder="Barangay" />
                 </div>
                 <div className="input-group">
                   <label>City / Municipality</label>
-                  <input type="text" name="city" value={formData.city} onChange={handleChange} placeholder="e.g., Odiongan" />
+                  <input type="text" name="city" value={formData.city} onChange={handleChange} placeholder="City" />
                 </div>
               </div>
             </div>
@@ -272,7 +316,7 @@ export default function RegisterTenant() {
             <div className="form-section">
               <div className="section-header">
                 <div className="section-icon"><i className="fa-solid fa-store"></i></div>
-                <h3>Business Assignment</h3>
+                <h3>Business & Payment Assignment</h3>
               </div>
               <div className="form-grid grid-2">
                 <div className="input-group">
@@ -281,23 +325,47 @@ export default function RegisterTenant() {
                     <option value="">Select an available stall...</option>
                     {availableStalls.map(stall => (
                       <option key={stall.id} value={stall.id}>
-                        {stall.stall_number} — ₱{stall.monthly_rent.toLocaleString(undefined, { minimumFractionDigits: 2 })}/month
+                        [{stall.section_name}] {stall.stall_number} — ₱{stall.monthly_rent.toLocaleString(undefined, { minimumFractionDigits: 2 })}/month
                       </option>
                     ))}
                   </select>
+                  
+                  {selectedStallDetails && (
+                    <div style={{ marginTop: '8px', padding: '8px 12px', background: '#eaf1ec', borderRadius: '6px', fontSize: '13px', color: '#217346', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #d5dfd8' }}>
+                      <i className={`fa-solid ${selectedStallDetails.icon_class}`}></i>
+                      <span>Section: <strong>{selectedStallDetails.section_name}</strong></span>
+                    </div>
+                  )}
                 </div>
+                
                 <div className="input-group">
                   <label>Business Name <span className="required">*</span></label>
-                  <input type="text" name="business_name" value={formData.business_name} onChange={handleChange} placeholder="e.g., Clara's Sari-Sari Store" required />
+                  <input type="text" name="business_name" value={formData.business_name} onChange={handleChange} placeholder="Business Name" required />
+                </div>
+                
+                <div className="input-group" style={{ gridColumn: 'span 2' }}>
+                  <label>Official Receipt No. <span className="required">*</span></label>
+                  <input 
+                    type="text" 
+                    value={orNumber} 
+                    onChange={(e) => setOrNumber(e.target.value)} 
+                    placeholder="Enter OR number from treasury" 
+                    autoComplete="off"
+                    maxLength={12}
+                    required
+                  />
                 </div>
               </div>
             </div>
 
             <div className="form-actions">
-              <button type="button" className="btn-outline" onClick={() => setFormData({ full_name: '', date_of_birth: '', contact_number: '', street: '', barangay: '', city: '', stall_id: '', business_name: '' })}>
+              <button type="button" className="btn-outline" onClick={() => {
+                setFormData({ full_name: '', date_of_birth: '', contact_number: '', street: '', barangay: '', city: '', stall_id: '', business_name: '' });
+                setOrNumber('');
+              }}>
                 Clear Form
               </button>
-              <button type="submit" className="btn-primary" disabled={isSubmitting}>
+              <button type="submit" className="btn-primary" disabled={isSubmitting || !orNumber.trim()}>
                 <i className="fa-solid fa-plus"></i> {isSubmitting ? 'Registering...' : 'Register Tenant'}
               </button>
             </div>

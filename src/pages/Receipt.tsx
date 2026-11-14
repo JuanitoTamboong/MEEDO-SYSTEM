@@ -94,6 +94,26 @@ export default function Receipt() {
   const totalPenalty = payments.reduce((sum, p) => sum + Number(p.penalty || 0), 0);
   const grandTotal = totalAmount + totalPenalty;
 
+  // Helper to generate exact coverage date string
+  const getCoverageString = (monthCovered: string) => {
+    if (!monthCovered) return 'N/A';
+    const fixedDay = tenant?.registration_date ? new Date(tenant.registration_date).getDate() : new Date(monthCovered).getDate();
+    
+    // Start date
+    const startObj = new Date(String(monthCovered).replace('-partial', ''));
+    startObj.setDate(fixedDay);
+    
+    // End date (next month)
+    const endObj = new Date(startObj);
+    endObj.setMonth(endObj.getMonth() + 1);
+    if (endObj.getDate() !== fixedDay) {
+      endObj.setDate(0); // Handle months with fewer days
+    }
+
+    // Format both dates completely
+    return `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  };
+
   return (
     <div className="receipt-page">
       <div className="receipt-container">
@@ -123,23 +143,24 @@ export default function Receipt() {
           </div>
 
           {payments.map(p => (
-            <div className="receipt-row" key={p.id}>
-              <span>
-                Monthly Rent (
-                {p.month_covered
-                  ? new Date(String(p.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-                  : 'N/A'}
-                {String(p.month_covered).includes('-partial') && (
-                  <span style={{ fontSize: '11px', color: '#f97316', marginLeft: '6px', fontWeight: 600 }}>(Remainder)</span>
-                )}
-                )
+            <div className="receipt-row" key={p.id} style={{ alignItems: 'flex-start', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span>Monthly Rent</span>
+                <span className="coverage-date">
+                  {getCoverageString(p.month_covered)}
+                  {String(p.month_covered).includes('-partial') && (
+                    <span style={{ color: '#f97316', marginLeft: '4px', fontWeight: 600 }}>(Remainder)</span>
+                  )}
+                </span>
+              </div>
+              <span style={{ paddingTop: '2px', whiteSpace: 'nowrap' }}>
+                ₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
-              <span>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
           ))}
 
           {totalPenalty > 0 && (
-            <div className="receipt-row">
+            <div className="receipt-row" style={{ marginTop: '8px' }}>
               <span>Penalty</span>
               <span>₱{totalPenalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>

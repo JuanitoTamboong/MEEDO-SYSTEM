@@ -65,7 +65,7 @@ export default function SendNotice() {
   const stallNumber = stall?.stall_number || '';
   const amountDue = Number(payment?.amount || 0);
   
-  // 🛑 FIX: Changed to 25%
+  // Calculate Penalty and Total Due
   const penalty = Number(payment?.penalty || (amountDue * 0.25));
   const totalDue = amountDue + penalty;
   
@@ -73,14 +73,28 @@ export default function SendNotice() {
   const graceDays = payment?.grace_period_days || 3;
   const contactNumber = tenant?.contact_number || '';
 
-  // 🛑 FIX: Calculate Days Overdue ACCURATELY (ignoring time of day)
+  // 🛑 Calculate Coverage Period
+  let coveragePeriod = 'N/A';
+  if (payment?.due_date) {
+    const startObj = new Date(payment.due_date);
+    const endObj = new Date(startObj);
+    endObj.setMonth(endObj.getMonth() + 1);
+    
+    if (endObj.getDate() !== startObj.getDate()) {
+      endObj.setDate(0);
+    }
+
+    coveragePeriod = `${startObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} to ${endObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+  }
+
+  // 🛑 Calculate Days Overdue ACCURATELY
   const dueDateObj = new Date(dueDate);
   const penaltyStartDate = new Date(dueDateObj);
   penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
-  penaltyStartDate.setHours(0, 0, 0, 0); // Reset time
+  penaltyStartDate.setHours(0, 0, 0, 0); 
 
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // Reset time
+  today.setHours(0, 0, 0, 0);
 
   const diffTime = today.getTime() - penaltyStartDate.getTime();
   const daysOverdue = diffTime > 0 ? Math.floor(diffTime / (1000 * 60 * 60 * 24)) : 0;
@@ -90,7 +104,8 @@ export default function SendNotice() {
   if (waNumber.length === 10 && waNumber.startsWith('9')) waNumber = '63' + waNumber;
   if (waNumber.length === 11 && waNumber.startsWith('0')) waNumber = '63' + waNumber.substring(1);
 
-  const message = `OFFICIAL NOTICE - OVERDUE ACCOUNT\n\nDear ${tenantName},\n\nThis is an official notice from MEEDO - Odiongan Public Market regarding your stall rental for Stall ${stallNumber}.\n\nAmount Due: PHP ${amountDue.toLocaleString(undefined, {minimumFractionDigits: 2})}\nPenalty (25%): PHP ${penalty.toLocaleString(undefined, {minimumFractionDigits: 2})}\nTotal Amount Due: PHP ${totalDue.toLocaleString(undefined, {minimumFractionDigits: 2})}\nDays Overdue: ${daysOverdue} days\nOriginal Due Date: ${new Date(dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}\n\nPlease settle your account immediately at the market office to avoid further penalties or legal action.\n\nThank you for your prompt attention to this matter.\n\n- MEEDO Management`;
+  // 🛑 Updated Message to use Coverage Period
+  const message = `OFFICIAL NOTICE - OVERDUE ACCOUNT\n\nDear ${tenantName},\n\nThis is an official notice from MEEDO - Odiongan Public Market regarding your stall rental for Stall ${stallNumber}.\n\nCoverage Period: ${coveragePeriod}\nAmount Due: PHP ${amountDue.toLocaleString(undefined, {minimumFractionDigits: 2})}\nPenalty (25%): PHP ${penalty.toLocaleString(undefined, {minimumFractionDigits: 2})}\nTotal Amount Due: PHP ${totalDue.toLocaleString(undefined, {minimumFractionDigits: 2})}\nDays Overdue: ${daysOverdue} days\n\nPlease settle your account immediately at the market office to avoid further penalties or legal action.\n\nThank you for your prompt attention to this matter.\n\n- MEEDO Management`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message);
@@ -148,6 +163,7 @@ export default function SendNotice() {
         <div className="info-grid">
           <div className="info-item"><span className="label">Tenant</span><span className="value">{tenantName}</span></div>
           <div className="info-item"><span className="label">Stall #</span><span className="value">{stallNumber}</span></div>
+          <div className="info-item" style={{ gridColumn: 'span 2' }}><span className="label">Coverage Period</span><span className="value">{coveragePeriod}</span></div>
           <div className="info-item"><span className="label">Base Amount</span><span className="value">₱{amountDue.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
           <div className="info-item"><span className="label">Penalty (25%)</span><span className="value danger">+ ₱{penalty.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
           <div className="info-item"><span className="label">Total Due</span><span className="value danger" style={{ fontSize: '16px' }}>₱{totalDue.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
