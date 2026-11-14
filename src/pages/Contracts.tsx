@@ -13,7 +13,6 @@ export default function Contracts() {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const [extendModalOpen, setExtendModalOpen] = useState(false);
-  const [editDateModalOpen, setEditDateModalOpen] = useState(false);
   const [undoModalOpen, setUndoModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [payBalanceModalOpen, setPayBalanceModalOpen] = useState(false);
@@ -23,8 +22,6 @@ export default function Contracts() {
 
   const [newEndDate, setNewEndDate] = useState('');
   const [payAll, setPayAll] = useState(false);
-  const [editStartDate, setEditStartDate] = useState('');
-  const [editEndDate, setEditEndDate] = useState('');
 
   const [payMonths, setPayMonths] = useState(1);
 
@@ -255,51 +252,6 @@ export default function Contracts() {
       setPayAll(false);
       fetchContracts();
 
-    } catch (err: any) {
-      setErrorMsg(err.message);
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handleEditDates = async () => {
-    if (!selectedContract) return;
-    setIsActionLoading(true);
-
-    try {
-      const start = new Date(editStartDate);
-      const end = new Date(editEndDate);
-
-      if (end <= start) throw new Error("The end date must be after the start date.");
-
-      let targetContractId = selectedContract.id;
-
-      if (selectedContract.id.toString().startsWith('temp-')) {
-        const { data: newContract, error: createError } = await supabase.from('contracts').insert([{
-          tenant_id: selectedContract.tenant_id,
-          stall_id: selectedContract.stall_id,
-          start_date: editStartDate,
-          end_date: editEndDate,
-          status: end < new Date() ? 'Expired' : 'Active'
-        }]).select().single();
-
-        if (createError) throw createError;
-        targetContractId = newContract.id;
-      } else {
-        await supabase.from('contracts').update({ start_date: editStartDate, end_date: editEndDate, status: end < new Date() ? 'Expired' : 'Active' }).eq('id', targetContractId);
-      }
-
-      const endMonth = editEndDate.slice(0, 7) + '-01';
-      await supabase.from('payments').delete()
-        .eq('stall_id', selectedContract.stall_id)
-        .neq('status', 'Paid')
-        .gt('month_covered', endMonth);
-
-      await recordAuditLog('Edit Contract', `Changed the contract dates for ${selectedContract.full_name} to ${editStartDate} - ${editEndDate}.`, 'Contract', typeof targetContractId === 'number' ? targetContractId : undefined);
-
-      setEditDateModalOpen(false);
-      setSuccessMsg('Contract dates updated.');
-      fetchContracts();
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -654,9 +606,6 @@ export default function Contracts() {
                             <i className="fa-solid fa-eye"></i>
                           </button>
 
-                          <button className="btn-icon" onClick={() => { setSelectedContract(c); setEditStartDate(c.start_date || ''); setEditEndDate(c.end_date || ''); setEditDateModalOpen(true); }}>
-                            <i className="fa-solid fa-pen"></i>
-                          </button>
                           <button className="btn-icon danger" onClick={() => { setSelectedContract(c); setUndoModalOpen(true); }}>
                             <i className="fa-solid fa-rotate-left"></i>
                           </button>
@@ -705,36 +654,6 @@ export default function Contracts() {
               <button className="btn-cancel" onClick={() => setExtendModalOpen(false)} disabled={isActionLoading}>Cancel</button>
               <button className="btn-primary" onClick={handleExtendContract} disabled={isActionLoading}>
                 {isActionLoading ? 'Saving...' : 'Save & Extend'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editDateModalOpen && selectedContract && (
-        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setEditDateModalOpen(false) }}>
-          <div className="modal-box" style={{ maxWidth: '500px', width: '100%' }}>
-            <div className="modal-icon info-icon"><i className="fa-regular fa-pen-to-square"></i></div>
-            <h3>Edit Contract Dates</h3>
-            <p>Select the exact start and end date for this contract.</p>
-            <div className="modal-details">
-              <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
-              <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-              <div className="input-group">
-                <label>Start Date</label>
-                <input type="date" value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)} />
-              </div>
-              <div className="input-group">
-                <label>End Date</label>
-                <input type="date" value={editEndDate} onChange={(e) => setEditEndDate(e.target.value)} />
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setEditDateModalOpen(false)} disabled={isActionLoading}>Cancel</button>
-              <button className="btn-primary" onClick={handleEditDates} disabled={isActionLoading}>
-                {isActionLoading ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
