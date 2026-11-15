@@ -31,15 +31,18 @@ export default function Dashboard() {
     async function loadData() {
       setIsLoading(true);
       try {
+        // Fetch all necessary data at once
         const [
           { data: stallsData },
+          { data: tenantsData },
           { count: tenantCount },
           { data: paymentsData },
           { data: recent }
         ] = await Promise.all([
-          supabase.from('stalls').select('status'),
+          supabase.from('stalls').select('*'),
+          supabase.from('tenants').select('*').eq('status', 'active'),
           supabase.from('tenants').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-          supabase.from('payments').select('stall_id, status, due_date, grace_period_days, month_covered, payment_date'), 
+          supabase.from('payments').select('*').order('due_date', { ascending: true }),
           supabase.from('stalls').select('stall_number, status, tenant_name, sections(section_name)').order('created_at', { ascending: false }).limit(5)
         ]);
 
@@ -48,36 +51,47 @@ export default function Dashboard() {
           
           let paidCount = 0;
           let overdueCount = 0;
-          
-          if (paymentsData) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
 
-            // 1. Calculate Paid Accounts (Unique stalls that have a Paid status for the CURRENT month)
-            const paidStalls = new Set(
-              paymentsData
-                .filter(p => p.status === 'Paid' && p.month_covered && p.month_covered.startsWith(currentMonthStr))
-                .map(p => p.stall_id)
-            );
-            paidCount = paidStalls.size;
+          // Replicate the exact logic from Stall Monitoring to calculate accurate metrics
+          stallsData.forEach((stall) => {
+            const activeTenant = tenantsData?.find(t => t.stall_id === stall.id);
+            const stallPayments = (paymentsData || []).filter(p => p.stall_id === stall.id);
+            
+            // Only calculate payment status for occupied stalls with a tenant
+            if (stall.status === 'Occupied' && activeTenant) {
+              const currentDueBill = stallPayments.find(p => {
+                if (p.status === 'Paid') return false;
+                const dueDate = new Date(p.due_date);
+                dueDate.setHours(0, 0, 0, 0);
+                return dueDate <= today;
+              });
 
-            // 2. Calculate Overdue Accounts (Unique stalls with at least 1 dynamically overdue bill)
-            const overdueStalls = new Set();
-            paymentsData.forEach(p => {
-              if (p.status === 'Paid') return;
-              
-              const dueDate = new Date(p.due_date);
-              const graceDays = p.grace_period_days || 3;
-              const penaltyStartDate = new Date(dueDate);
-              penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+              const nextBill = stallPayments.find(p => {
+                if (p.status === 'Paid') return false;
+                const dueDate = new Date(p.due_date);
+                dueDate.setHours(0, 0, 0, 0);
+                return dueDate > today;
+              });
 
-              if (today > penaltyStartDate) {
-                overdueStalls.add(p.stall_id);
+              const activeBill = currentDueBill || nextBill;
+
+              if (!activeBill) {
+                paidCount++;
+              } else {
+                const dueDate = new Date(activeBill.due_date);
+                const graceDays = activeBill.grace_period_days || 3;
+                const penaltyStartDate = new Date(dueDate);
+                penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+                penaltyStartDate.setHours(0, 0, 0, 0);
+
+                if (today > penaltyStartDate) {
+                  overdueCount++;
+                }
               }
-            });
-            overdueCount = overdueStalls.size;
-          }
+            }
+          });
 
           setOverview({
             stalls: stallsData.length,
@@ -152,7 +166,7 @@ export default function Dashboard() {
             </span>
           </Link>
 
-          <Link className="metric-card metric-primary" to="/financial-reports">
+          <Link className="metric-card metric-primary" to="/stall-monitoring">
             <div className="metric-icon" style={{ background: '#eff6ff', color: '#3b82f6' }}><i className="fa-solid fa-receipt"></i></div>
             <span>
               <small>Paid Accounts</small>
@@ -161,7 +175,7 @@ export default function Dashboard() {
             </span>
           </Link>
 
-          <Link className="metric-card metric-danger" to="/financial-reports">
+          <Link className="metric-card metric-danger" to="/stall-monitoring">
             <div className="metric-icon" style={{ background: '#fef2f2', color: '#ef4444' }}><i className="fa-solid fa-triangle-exclamation"></i></div>
             <span>
               <small>Overdue Accounts</small>
