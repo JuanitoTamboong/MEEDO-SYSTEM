@@ -23,7 +23,7 @@ interface OverduePayment {
   amount: number;
   due_date: string;
   penalty: number;
-  grace_period_days: number; // 🛑 ADDED THIS
+  grace_period_days: number;
 }
 
 export default function StallMonitoring() {
@@ -80,23 +80,17 @@ export default function StallMonitoring() {
           (payment) => payment.stall_id === stall.id
         );
 
-        // Find the oldest unpaid bill due today or earlier.
         const currentDueBill = stallPayments.find((payment) => {
           if (payment.status === 'Paid') return false;
-
           const dueDate = new Date(payment.due_date);
           dueDate.setHours(0, 0, 0, 0);
-
           return dueDate <= today;
         });
 
-        // If there is no current bill, find the nearest future bill.
         const nextBill = stallPayments.find((payment) => {
           if (payment.status === 'Paid') return false;
-
           const dueDate = new Date(payment.due_date);
           dueDate.setHours(0, 0, 0, 0);
-
           return dueDate > today;
         });
 
@@ -147,7 +141,6 @@ export default function StallMonitoring() {
         mappedStalls.filter((stall) => stall.payment_status === 'Overdue').length
       );
 
-      // Build the overdue accounts list.
       const dynamicOverdue = (paymentsData || []).filter((payment) => {
         if (payment.status === 'Paid') return false;
 
@@ -177,7 +170,7 @@ export default function StallMonitoring() {
           amount: payment.amount,
           due_date: payment.due_date,
           penalty: payment.penalty || 0,
-          grace_period_days: payment.grace_period_days || 3 // 🛑 SAVED TO STATE
+          grace_period_days: payment.grace_period_days || 3
         };
       });
 
@@ -445,7 +438,6 @@ export default function StallMonitoring() {
                               <i className="fa-solid fa-eye" aria-hidden="true"></i>
                             </button>
 
-                            {/* ALWAYS render the second button slot to maintain grid structure */}
                             <button
                               type="button"
                               className={`btn-action reminder ${(!stall.tenant_name || stall.payment_status !== 'Pending') ? 'is-hidden' : ''}`}
@@ -501,7 +493,6 @@ export default function StallMonitoring() {
               <tbody>
                 {overdueList.map((overdue) => {
                   const dueDate = new Date(overdue.due_date);
-                  // 🛑 FIX: Use the exact grace period from the database
                   const graceDays = overdue.grace_period_days; 
 
                   const penaltyStartDate = new Date(dueDate);

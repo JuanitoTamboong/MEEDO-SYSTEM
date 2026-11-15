@@ -80,7 +80,7 @@ export default function Contracts() {
 
           const paidTotal = validPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
           
-          // Synchronized frontend penalty calculation to match StallDetails
+          // Synchronized frontend penalty calculation
           const remainingTotal = validPayments
             .filter(p => p.status !== 'Paid')
             .reduce((sum, p) => {
@@ -182,7 +182,7 @@ export default function Contracts() {
       if (contractEnd && baseMonth > contractEnd) return false;
       return true;
     }).map(bill => {
-      // Synchronized frontend penalty calculation for the modal
+      // Synchronized frontend penalty calculation
       const dueDate = new Date(bill.due_date);
       const graceDays = bill.grace_period_days || 3;
       const penaltyStartDate = new Date(dueDate);
@@ -191,22 +191,21 @@ export default function Contracts() {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      if (today > penaltyStartDate && bill.status === 'Pending') {
-        return {
-          ...bill,
-          status: 'Overdue',
-          penalty: Number(bill.amount) * 0.25
-        };
-      }
-      
-      if (bill.status === 'Overdue' && Number(bill.penalty) === 0) {
-        return {
-          ...bill,
-          penalty: Number(bill.amount) * 0.25
-        };
+      let computedPenalty = Number(bill.penalty) || 0;
+      let newStatus = bill.status;
+
+      if (today > penaltyStartDate && bill.status === 'Pending' && computedPenalty === 0) {
+        computedPenalty = Number(bill.amount) * 0.25;
+        newStatus = 'Overdue';
+      } else if (bill.status === 'Overdue' && computedPenalty === 0) {
+        computedPenalty = Number(bill.amount) * 0.25;
       }
 
-      return bill;
+      return {
+        ...bill,
+        status: newStatus,
+        penalty: computedPenalty
+      };
     });
 
     setUnpaidBillsList(relevantBills);
@@ -355,11 +354,13 @@ export default function Contracts() {
             if (String(bill.month_covered).includes('-partial')) continue;
             
             const penaltyAmount = bill.status === 'Overdue' ? bill.penalty : 0;
+            const totalPaid = Number(bill.amount) + Number(penaltyAmount);
             
             const { error: updateError } = await supabase.from('payments').update({
               status: 'Paid',
               payment_date: todayStr,
               penalty: penaltyAmount,
+              amount_paid: totalPaid,
               receipt_number: trimmedOr
             }).eq('id', bill.id);
 
@@ -513,11 +514,13 @@ export default function Contracts() {
         if (String(bill.month_covered).includes('-partial')) continue;
 
         const penaltyAmount = bill.status === 'Overdue' ? bill.penalty : 0;
+        const totalPaid = Number(bill.amount) + Number(penaltyAmount);
 
         await supabase.from('payments').update({
           status: 'Paid',
           payment_date: todayStr,
           penalty: penaltyAmount,
+          amount_paid: totalPaid,
           receipt_number: trimmedOr
         }).eq('id', bill.id);
       }
@@ -800,36 +803,52 @@ export default function Contracts() {
 
       {payBalanceModalOpen && selectedContract && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setPayBalanceModalOpen(false) }}>
-          <div className="modal-box" style={{ maxWidth: '500px', width: '100%' }}>
-            <div className="modal-icon success-icon"><i className="fa-solid fa-money-bill-wave"></i></div>
-            <h3>Pay Outstanding Balance</h3>
-            <p>Select how many months to pay. The payment will be applied to the oldest unpaid months first.</p>
-
-            <div className="modal-details">
-              <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
-              <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
-              <div><strong>Monthly Rent:</strong> ₱{Number(selectedContract.monthly_rent).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-              <div style={{ marginTop: '8px', padding: '10px', background: '#fef2f2', borderRadius: '8px' }}>
-                <strong style={{ color: '#dc2626' }}>Total Outstanding:</strong>{' '}
-                <span style={{ color: '#dc2626', fontWeight: 700, fontSize: '18px' }}>
-                  ₱{unpaidBillsList.reduce((sum, b) => sum + Number(b.amount) + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </span>
+          <div className="modal-box" style={{ maxWidth: '450px', padding: '20px' }}>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ background: '#ecfdf5', color: '#059669', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <i className="fa-solid fa-receipt" style={{ fontSize: '18px' }}></i>
+              </div>
+              <div>
+                <h3 style={{ fontSize: '18px', margin: '0 0 2px 0', color: '#0f172a' }}>Record Payment</h3>
+                <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Select the months to pay and enter the OR number.</p>
               </div>
             </div>
 
-            <div className="input-group" style={{ marginBottom: '16px', marginTop: '16px' }}>
-              <label>Select Months to Pay</label>
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
+                <span style={{ color: '#64748b' }}>Tenant:</span>
+                <strong style={{ color: '#0f172a' }}>{selectedContract.full_name}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
+                <span style={{ color: '#64748b' }}>Stall:</span>
+                <strong style={{ color: '#0f172a' }}>{selectedContract.stall_number}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
+                <span style={{ color: '#64748b' }}>Base Rent:</span>
+                <strong style={{ color: '#0f172a' }}>₱{Number(selectedContract.monthly_rent).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: '8px', marginTop: '6px', fontSize: '13px' }}>
+                <strong style={{ color: '#dc2626' }}>Total Balance:</strong>
+                <strong style={{ color: '#dc2626' }}>₱{selectedContract.remaining_total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              </div>
+            </div>
+
+            <div className="input-group" style={{ marginBottom: '16px' }}>
+              <label style={{ fontWeight: 600, fontSize: '13px', color: '#334155', marginBottom: '6px', display: 'block' }}>Select Months to Pay</label>
               <select
                 value={payMonths}
                 onChange={(e) => setPayMonths(Number(e.target.value))}
                 style={{
-                  padding: '12px',
-                  fontSize: '16px',
+                  padding: '10px 12px',
+                  fontSize: '14px',
                   borderRadius: '6px',
                   border: '1px solid #cbd5e1',
                   width: '100%',
-                  backgroundColor: 'white',
-                  cursor: 'pointer'
+                  backgroundColor: '#fff',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  appearance: 'auto'
                 }}
               >
                 {Array.from({ length: unpaidBillsList.length }, (_, i) => i + 1).map(m => {
@@ -841,15 +860,38 @@ export default function Contracts() {
                   }
                   return (
                     <option key={m} value={m}>
-                      {m} Month{m > 1 ? 's' : ''} (₱{cost.toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                      {m} Month{m > 1 ? 's' : ''} — Total: ₱{cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </option>
                   );
                 })}
               </select>
             </div>
 
-            <div className="input-group" style={{ marginBottom: '16px' }}>
-              <label>Official Receipt No. <span style={{ color: '#dc2626' }}>*</span></label>
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px', color: '#14532d' }}>
+                <span>Rent ({payMonths} month{payMonths > 1 ? 's' : ''}):</span>
+                <span>₱{unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + Number(b.amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+              
+              {unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px', color: '#dc2626' }}>
+                  <span>Penalties Included:</span>
+                  <span>+ ₱{unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #86efac', paddingTop: '8px', marginTop: '6px' }}>
+                <strong style={{ fontSize: '14px', color: '#166534' }}>Total to Pay:</strong>
+                <strong style={{ fontSize: '16px', color: '#166534' }}>
+                  ₱{unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + Number(b.amount) + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </strong>
+              </div>
+            </div>
+
+            <div className="input-group" style={{ marginBottom: '20px' }}>
+              <label style={{ fontWeight: 600, fontSize: '13px', color: '#334155', marginBottom: '6px', display: 'block' }}>
+                Official Receipt No. <span style={{ color: '#dc2626' }}>*</span>
+              </label>
               <input
                 type="text"
                 value={payOrNumber}
@@ -857,28 +899,57 @@ export default function Contracts() {
                 placeholder="e.g., 000851"
                 autoComplete="off"
                 maxLength={12}
-                style={{ padding: '12px', fontSize: '16px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                style={{ 
+                  padding: '10px 12px', 
+                  fontSize: '14px', 
+                  borderRadius: '6px', 
+                  border: '1px solid #cbd5e1',
+                  width: '100%',
+                  outline: 'none'
+                }}
               />
-              <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                Type the OR number exactly as written on the physical receipt.
-              </small>
             </div>
 
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setPayBalanceModalOpen(false)} disabled={isActionLoading}>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button 
+                type="button"
+                className="btn-cancel" 
+                onClick={() => setPayBalanceModalOpen(false)} 
+                disabled={isActionLoading}
+                style={{ flex: 1, padding: '10px', borderRadius: '6px', fontWeight: 600, fontSize: '14px' }}
+              >
                 Cancel
               </button>
               <button
+                type="button"
                 className="btn-primary"
-                style={{ background: '#059669', borderColor: '#059669', flex: 1, marginLeft: '8px' }}
+                style={{ 
+                  background: '#059669', 
+                  borderColor: '#059669', 
+                  flex: 2, 
+                  padding: '10px', 
+                  borderRadius: '6px', 
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
                 onClick={handlePayBalance}
                 disabled={isActionLoading || unpaidBillsList.length === 0 || !payOrNumber.trim()}
               >
-                {isActionLoading ? 'Processing...' : `Pay ₱${
-                  unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + Number(b.amount) + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })
-                }`}
+                {isActionLoading ? (
+                  <>Processing...</>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-check-circle"></i>
+                    Pay ₱{unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + Number(b.amount) + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </>
+                )}
               </button>
             </div>
+            
           </div>
         </div>
       )}
