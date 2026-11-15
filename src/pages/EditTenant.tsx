@@ -391,29 +391,6 @@ export default function EditTenant() {
         <div className="form-body">
           <form onSubmit={handleSubmit}>
             
-            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '16px', marginBottom: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                <div style={{ background: '#fee2e2', color: '#dc2626', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <i className="fa-solid fa-triangle-exclamation"></i>
-                </div>
-                <div>
-                  <h4 style={{ margin: '0 0 6px 0', color: '#991b1b', fontSize: '15px' }}>Important Note on Date Changes</h4>
-                  <p style={{ margin: 0, color: '#b91c1c', fontSize: '13px', lineHeight: '1.5' }}>
-                    Changing the **Registration Date** will automatically **delete all existing payment history** and generate a new billing cycle based on the new date. This action cannot be undone.
-                  </p>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', cursor: 'pointer', fontSize: '14px', color: '#7f1d1d', fontWeight: 600 }}>
-                    <input 
-                      type="checkbox" 
-                      checked={confirmReset} 
-                      onChange={(e) => setConfirmReset(e.target.checked)} 
-                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                    />
-                    I understand and want to reset the billing cycle
-                  </label>
-                </div>
-              </div>
-            </div>
-
             <div className="form-section">
               <div className="section-header">
                 <div className="section-icon"><i className="fa-solid fa-user"></i></div>
@@ -485,7 +462,7 @@ export default function EditTenant() {
                   <input type="text" name="business_name" value={formData.business_name} onChange={handleChange} placeholder="Business Name" required />
                 </div>
 
-                <div className="input-group">
+                <div className="input-group" style={{ gridColumn: '1 / -1' }}>
                   <label>Registration Date <span className="required">*</span></label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input
@@ -547,6 +524,31 @@ export default function EditTenant() {
                     />
                   </div>
                 </div>
+
+                {isDateChanged && (
+                  <div style={{ gridColumn: '1 / -1', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '16px', marginTop: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <div style={{ background: '#fee2e2', color: '#dc2626', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <i className="fa-solid fa-triangle-exclamation"></i>
+                      </div>
+                      <div>
+                        <h4 style={{ margin: '0 0 6px 0', color: '#991b1b', fontSize: '15px' }}>Reset Billing Cycle</h4>
+                        <p style={{ margin: 0, color: '#b91c1c', fontSize: '13px', lineHeight: '1.5', marginBottom: '12px' }}>
+                          Changing the **Registration Date** will automatically **delete all existing payment history** and generate a new billing cycle based on the new date. This action cannot be undone.
+                        </p>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: '#7f1d1d', fontWeight: 600 }}>
+                          <input 
+                            type="checkbox" 
+                            checked={confirmReset} 
+                            onChange={(e) => setConfirmReset(e.target.checked)} 
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                          />
+                          I understand and want to reset the billing cycle
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
