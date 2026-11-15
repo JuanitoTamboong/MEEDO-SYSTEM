@@ -11,19 +11,15 @@ export default function Dashboard() {
   const [recentStalls, setRecentStalls] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // NEW: State for dynamic user name
   const [userName, setUserName] = useState('Admin');
 
-  // Generate Greeting based on time of day
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   useEffect(() => {
-    // NEW: Fetch current user from Supabase Auth
     async function getUser() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Use full_name if available, otherwise fallback to role (e.g., "Meedo Personnel")
         const name = user.user_metadata?.full_name || user.user_metadata?.role || user.email?.split('@')[0] || 'Admin';
         setUserName(name.charAt(0).toUpperCase() + name.slice(1));
       }
@@ -43,7 +39,7 @@ export default function Dashboard() {
         ] = await Promise.all([
           supabase.from('stalls').select('status'),
           supabase.from('tenants').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-          supabase.from('payments').select('stall_id, status'), 
+          supabase.from('payments').select('stall_id, status, due_date, grace_period_days, month_covered, payment_date'), 
           supabase.from('stalls').select('stall_number, status, tenant_name, sections(section_name)').order('created_at', { ascending: false }).limit(5)
         ]);
 
@@ -54,10 +50,32 @@ export default function Dashboard() {
           let overdueCount = 0;
           
           if (paymentsData) {
-            const paidStalls = new Set(paymentsData.filter(p => p.status === 'Paid').map(p => p.stall_id));
-            const overdueStalls = new Set(paymentsData.filter(p => p.status === 'Overdue').map(p => p.stall_id));
-            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+            // 1. Calculate Paid Accounts (Unique stalls that have a Paid status for the CURRENT month)
+            const paidStalls = new Set(
+              paymentsData
+                .filter(p => p.status === 'Paid' && p.month_covered && p.month_covered.startsWith(currentMonthStr))
+                .map(p => p.stall_id)
+            );
             paidCount = paidStalls.size;
+
+            // 2. Calculate Overdue Accounts (Unique stalls with at least 1 dynamically overdue bill)
+            const overdueStalls = new Set();
+            paymentsData.forEach(p => {
+              if (p.status === 'Paid') return;
+              
+              const dueDate = new Date(p.due_date);
+              const graceDays = p.grace_period_days || 3;
+              const penaltyStartDate = new Date(dueDate);
+              penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+
+              if (today > penaltyStartDate) {
+                overdueStalls.add(p.stall_id);
+              }
+            });
             overdueCount = overdueStalls.size;
           }
 
@@ -97,7 +115,6 @@ export default function Dashboard() {
       {/* Header */}
       <div className="header">
         <div>
-          {/* FIXED: Using dynamic userName */}
           <h1>{greeting}, {userName} 👋</h1>
           <p><i className="fa-regular fa-calendar"></i> {new Date().toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
