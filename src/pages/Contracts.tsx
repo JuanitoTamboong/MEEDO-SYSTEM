@@ -80,7 +80,6 @@ export default function Contracts() {
 
           const paidTotal = validPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
           
-          // Synchronized frontend penalty calculation
           const remainingTotal = validPayments
             .filter(p => p.status !== 'Paid')
             .reduce((sum, p) => {
@@ -182,7 +181,6 @@ export default function Contracts() {
       if (contractEnd && baseMonth > contractEnd) return false;
       return true;
     }).map(bill => {
-      // Synchronized frontend penalty calculation
       const dueDate = new Date(bill.due_date);
       const graceDays = bill.grace_period_days || 3;
       const penaltyStartDate = new Date(dueDate);
@@ -997,6 +995,26 @@ export default function Contracts() {
                         coverageDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
                       }
 
+                      let displayStatus = p.status;
+                      let displayPenalty = Number(p.penalty) || 0;
+
+                      if (p.status !== 'Paid') {
+                        const dueDate = new Date(p.due_date);
+                        const graceDays = p.grace_period_days || 3;
+                        const penaltyStartDate = new Date(dueDate);
+                        penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+                        
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
+                        if (today > penaltyStartDate) {
+                          displayStatus = 'Overdue';
+                          if (displayPenalty === 0) {
+                            displayPenalty = Number(p.amount) * 0.25;
+                          }
+                        }
+                      }
+
                       return (
                         <tr key={p.id}>
                           <td>
@@ -1008,11 +1026,18 @@ export default function Contracts() {
                             )}
                           </td>
                           <td style={{ color: '#64748b', fontSize: '12px' }}>{coverageDisplay}</td>
-                          <td>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td>
+                            ₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {displayPenalty > 0 && (
+                              <span style={{ color: '#dc2626', fontSize: '11px', display: 'block', marginTop: '4px' }}>
+                                + ₱{displayPenalty.toLocaleString(undefined, { minimumFractionDigits: 2 })} penalty
+                              </span>
+                            )}
+                          </td>
                           <td>{p.receipt_number || '—'}</td>
                           <td>
-                            <span className={`status-badge ${p.status.toLowerCase()}`}>
-                              {p.status}
+                            <span className={`status-badge ${displayStatus.toLowerCase()}`}>
+                              {displayStatus}
                             </span>
                           </td>
                           <td>
