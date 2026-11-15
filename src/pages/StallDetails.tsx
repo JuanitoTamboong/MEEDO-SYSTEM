@@ -511,7 +511,9 @@ export default function StallDetails() {
             <div className="info-row"><span className="info-label">Current Tenant</span><span className="info-value">{tenant ? tenant.full_name : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>None assigned</span>}</span></div>
             <div className="info-row"><span className="info-label">Business Name</span><span className="info-value">{tenant?.business_name || '—'}</span></div>
             <div className="info-row"><span className="info-label">Contact Number</span><span className="info-value">{tenant?.contact_number || '—'}</span></div>
-            <div className="info-row"><span className="info-label">Date Occupied</span><span className="info-value">{tenant?.created_at ? new Date(tenant.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span></div>
+            
+            {/* 🛑 FIX: Used registration_date instead of created_at */}
+            <div className="info-row"><span className="info-label">Date Occupied</span><span className="info-value">{tenant?.registration_date ? new Date(tenant.registration_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span></div>
           </div>
         </div>
 
