@@ -54,7 +54,6 @@ export default function FinancialReports() {
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
 
-      // 1. Fetch Stalls, Sections, and Tenants
       const { data: stallsData } = await supabase.from('stalls').select('id, stall_number, section_id');
       const { data: sectionsData } = await supabase.from('sections').select('id, section_name');
       const { data: tenantsData } = await supabase.from('tenants').select('stall_id, full_name').eq('status', 'active');
@@ -63,7 +62,6 @@ export default function FinancialReports() {
       const sectionMap = new Map(sectionsData?.map(s => [s.id, s]) || []);
       const tenantMap = new Map(tenantsData?.map(t => [t.stall_id, t.full_name]) || []);
 
-      // 2. Fetch Monthly Paid Payments (Filtered by month_covered)
       const { data: paidData } = await supabase
         .from('payments')
         .select('*')
@@ -98,12 +96,10 @@ export default function FinancialReports() {
         setAvgPayment(0);
       }
 
-      // 3. Fetch Occupied Stalls (Collection Rate)
       const { count: tenantCount } = await supabase.from('stalls').select('*', { count: 'exact', head: true }).eq('status', 'Occupied');
       const tenants = tenantCount || 0;
       setCollectionRate(tenants > 0 ? Math.round(((paidData?.length || 0) / tenants) * 100) : 0);
 
-      // 4. Fetch Dynamic Overdue Payments (Pending bills past due date + grace period)
       const { data: pendingBills } = await supabase
         .from('payments')
         .select('*')
@@ -113,7 +109,6 @@ export default function FinancialReports() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // Filter to only those actually overdue (past due date + grace period)
         const dynamicOverdue = pendingBills.map(o => {
           const dueDate = new Date(o.due_date);
           const graceDays = o.grace_period_days || 3;
@@ -134,7 +129,7 @@ export default function FinancialReports() {
             };
           }
           return null;
-        }).filter(Boolean); // Remove non-overdue bills
+        }).filter(Boolean);
 
         const enrichedOverdue = dynamicOverdue.map(o => {
           if (!o) return null;
@@ -150,13 +145,10 @@ export default function FinancialReports() {
           };
         }).filter(Boolean); 
 
-        // Sort by oldest due date first
         enrichedOverdue.sort((a, b) => new Date(a!.due_date).getTime() - new Date(b!.due_date).getTime());
-        
         setOverduePayments(enrichedOverdue as any[]);
       }
 
-      // 5. Fetch Annual Data (Filtered by month_covered)
       const { data: annualRaw } = await supabase
         .from('payments')
         .select('amount, month_covered')
@@ -169,7 +161,8 @@ export default function FinancialReports() {
         let runningTotal = 0;
 
         annualRaw.forEach(p => {
-          const month = new Date(p.month_covered!).getMonth() + 1;
+          if (!p.month_covered) return;
+          const month = new Date(p.month_covered).getMonth() + 1;
           if (!grouped[month]) grouped[month] = { total: 0, count: 0 };
           grouped[month].total += Number(p.amount);
           grouped[month].count += 1;
@@ -323,7 +316,8 @@ export default function FinancialReports() {
                   ) : (
                     monthlyPayments.map(p => (
                       <tr key={p.id}>
-                        <td>{new Date(p.payment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                        {/* 🛑 FIX: Use due_date instead of payment_date to show the Coverage Date */}
+                        <td>{new Date(p.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                         <td><strong>{p.stall_number || '—'}</strong></td>
                         <td>{p.display_tenant_name || '—'}</td>
                         <td>{p.section_name || '—'}</td>
@@ -427,7 +421,6 @@ export default function FinancialReports() {
                     <tr><td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No overdue accounts found.</td></tr>
                   ) : (
                     overduePayments.map(o => {
-                      // Use the pre-calculated values from fetchData
                       return (
                         <tr key={o.id}>
                           <td><strong style={{ color: '#dc2626' }}>{o.stall_number || '—'}</strong></td>

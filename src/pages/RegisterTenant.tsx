@@ -32,7 +32,6 @@ function dueDateForMonth(year: number, monthIndex: number, anchorDay: number): D
   return new Date(year, monthIndex, day);
 }
 
-// Helper to convert YYYY-MM-DD to MM/DD/YYYY for the input
 function toDisplayDate(isoDate: string): string {
   if (!isoDate) return '';
   const parts = isoDate.split('-');
@@ -40,7 +39,6 @@ function toDisplayDate(isoDate: string): string {
   return isoDate;
 }
 
-// Helper to convert MM/DD/YYYY back to YYYY-MM-DD for the database
 function toIsoDate(displayDate: string): string {
   const parts = displayDate.split('/');
   if (parts.length === 3) return `${parts[2]}-${parts[0]}-${parts[1]}`;
@@ -133,8 +131,8 @@ export default function RegisterTenant() {
   };
 
   const handleRegDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
-    if (value.length > 8) value = value.slice(0, 8); // Max 8 digits (MMDDYYYY)
+    let value = e.target.value.replace(/\D/g, ''); 
+    if (value.length > 8) value = value.slice(0, 8); 
 
     let formatted = '';
     if (value.length > 0) formatted += value.slice(0, 2);
@@ -242,7 +240,6 @@ export default function RegisterTenant() {
         .eq('id', selectedStall.id);
 
       const today = new Date();
-      const todayStr = dateKey(today);
       const anchorDay = regDateOnly.getDate();
       const regMonthFirst = new Date(regDateOnly.getFullYear(), regDateOnly.getMonth(), 1);
       const currentMonthFirst = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -251,7 +248,7 @@ export default function RegisterTenant() {
         stall_id: selectedStall.id,
         tenant_name: formData.full_name.trim(),
         amount: selectedStall.monthly_rent,
-        payment_date: todayStr,
+        payment_date: dateKey(regDateOnly), // ✅ FIX: Uses manual registration date
         due_date: dateKey(regDateOnly),
         month_covered: monthKey(regMonthFirst),
         status: 'Paid',
