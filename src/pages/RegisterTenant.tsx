@@ -13,6 +13,40 @@ interface AvailableStall {
   monthly_rent: number;
 }
 
+function monthKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}-01`;
+}
+
+function dateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function dueDateForMonth(year: number, monthIndex: number, anchorDay: number): Date {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  const day = Math.min(anchorDay, lastDay);
+  return new Date(year, monthIndex, day);
+}
+
+// Helper to convert YYYY-MM-DD to MM/DD/YYYY for the input
+function toDisplayDate(isoDate: string): string {
+  if (!isoDate) return '';
+  const parts = isoDate.split('-');
+  if (parts.length === 3) return `${parts[1]}/${parts[2]}/${parts[0]}`;
+  return isoDate;
+}
+
+// Helper to convert MM/DD/YYYY back to YYYY-MM-DD for the database
+function toIsoDate(displayDate: string): string {
+  const parts = displayDate.split('/');
+  if (parts.length === 3) return `${parts[2]}-${parts[0]}-${parts[1]}`;
+  return displayDate;
+}
+
 export default function RegisterTenant() {
   const [totalTenants, setTotalTenants] = useState(0);
   const [newThisMonth, setNewThisMonth] = useState(0);
@@ -26,9 +60,11 @@ export default function RegisterTenant() {
     barangay: '',
     city: '',
     stall_id: '',
-    business_name: ''
+    business_name: '',
+    registration_date: dateKey(new Date())
   });
 
+  const [regDateDisplay, setRegDateDisplay] = useState(toDisplayDate(dateKey(new Date())));
   const [orNumber, setOrNumber] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,7 +87,7 @@ export default function RegisterTenant() {
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
-      
+
       const { count: newCount } = await supabase
         .from('tenants')
         .select('*', { count: 'exact', head: true })
@@ -62,9 +98,9 @@ export default function RegisterTenant() {
       const { data: stallsData } = await supabase
         .from('stalls')
         .select(`
-          id, 
-          stall_number, 
-          section_id, 
+          id,
+          stall_number,
+          section_id,
           monthly_rent,
           sections (
             section_name,
@@ -73,7 +109,7 @@ export default function RegisterTenant() {
         `)
         .eq('status', 'Vacant')
         .order('stall_number', { ascending: true });
-      
+
       if (stallsData) {
         const formattedStalls = stallsData.map((s: any) => ({
           id: s.id,
@@ -96,6 +132,19 @@ export default function RegisterTenant() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleRegDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+    if (value.length > 8) value = value.slice(0, 8); // Max 8 digits (MMDDYYYY)
+
+    let formatted = '';
+    if (value.length > 0) formatted += value.slice(0, 2);
+    if (value.length > 2) formatted += '/' + value.slice(2, 4);
+    if (value.length > 4) formatted += '/' + value.slice(4, 8);
+
+    setRegDateDisplay(formatted);
+    setFormData({ ...formData, registration_date: toIsoDate(formatted) });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -115,7 +164,29 @@ export default function RegisterTenant() {
     }
 
     if (!formData.full_name || !formData.contact_number || !formData.stall_id || !formData.business_name) {
-      setErrorMsg("Please fill in all required fields.");
+      setErrorMsg('Please fill in all required fields.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!formData.registration_date || regDateDisplay.length !== 10) {
+      setErrorMsg('Please enter a valid Registration Date in MM/DD/YYYY format.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const regDateOnly = new Date(formData.registration_date + 'T00:00:00');
+    
+    if (isNaN(regDateOnly.getTime())) {
+      setErrorMsg('Invalid date. Please use MM/DD/YYYY or use the calendar icon.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const todayOnly = new Date();
+    todayOnly.setHours(0, 0, 0, 0);
+    if (regDateOnly > todayOnly) {
+      setErrorMsg('Registration date cannot be in the future.');
       setIsSubmitting(false);
       return;
     }
@@ -129,13 +200,12 @@ export default function RegisterTenant() {
         .limit(1);
 
       if (existing && existing.length > 0) {
-        throw new Error("An active tenant with this name already exists.");
+        throw new Error('An active tenant with this name already exists.');
       }
 
       const selectedStall = availableStalls.find(s => s.id === Number(formData.stall_id));
-      if (!selectedStall) throw new Error("Selected stall is no longer available.");
+      if (!selectedStall) throw new Error('Selected stall is no longer available.');
 
-      // 🛑 CHECK: Is this OR number already used by ANOTHER tenant?
       const { data: existingOr } = await supabase
         .from('payments')
         .select('stall_id')
@@ -146,9 +216,6 @@ export default function RegisterTenant() {
       if (existingOr && existingOr.length > 0) {
         throw new Error(`Receipt number ${trimmedOr} is already used by another tenant. Please enter a unique OR.`);
       }
-
-      const today = new Date(); 
-      const todayString = today.toISOString().split('T')[0];
 
       const { data: tenantData, error: tenantError } = await supabase
         .from('tenants')
@@ -162,7 +229,7 @@ export default function RegisterTenant() {
           stall_id: selectedStall.id,
           business_name: formData.business_name.trim(),
           status: 'active',
-          registration_date: todayString
+          registration_date: formData.registration_date
         }])
         .select()
         .single();
@@ -174,34 +241,87 @@ export default function RegisterTenant() {
         .update({ status: 'Occupied', tenant_name: formData.full_name.trim() })
         .eq('id', selectedStall.id);
 
-      // Insert initial payment (grace_period_days is handled by SQL default)
-      await supabase.from('payments').insert([{
+      const today = new Date();
+      const todayStr = dateKey(today);
+      const anchorDay = regDateOnly.getDate();
+      const regMonthFirst = new Date(regDateOnly.getFullYear(), regDateOnly.getMonth(), 1);
+      const currentMonthFirst = new Date(today.getFullYear(), today.getMonth(), 1);
+
+      const firstPayment = {
         stall_id: selectedStall.id,
         tenant_name: formData.full_name.trim(),
         amount: selectedStall.monthly_rent,
-        payment_date: todayString,
-        due_date: todayString,
-        month_covered: `${todayString.slice(0, 7)}-01`, 
+        payment_date: todayStr,
+        due_date: dateKey(regDateOnly),
+        month_covered: monthKey(regMonthFirst),
         status: 'Paid',
         receipt_number: trimmedOr
-      }]);
+      };
+
+      const pendingBills: any[] = [];
+      let cursor = new Date(regMonthFirst);
+      cursor.setMonth(cursor.getMonth() + 1);
+
+      while (cursor <= currentMonthFirst) {
+        const due = dueDateForMonth(cursor.getFullYear(), cursor.getMonth(), anchorDay);
+        pendingBills.push({
+          stall_id: selectedStall.id,
+          tenant_name: formData.full_name.trim(),
+          amount: selectedStall.monthly_rent,
+          payment_date: null,
+          due_date: dateKey(due),
+          month_covered: monthKey(cursor),
+          status: 'Pending',
+          receipt_number: null
+        });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+
+      const { error: firstPayErr } = await supabase.from('payments').insert([firstPayment]);
+      if (firstPayErr) throw firstPayErr;
+
+      if (pendingBills.length > 0) {
+        const { error: billErr } = await supabase.from('payments').insert(pendingBills);
+        if (billErr) throw billErr;
+      }
+
+      const billSummary = pendingBills.length > 0
+        ? ` + ${pendingBills.length} pending month(s) back-billed.`
+        : ' No back-bills needed.';
 
       await recordAuditLog(
-        'Register Tenant', 
-        `Registered tenant '${formData.full_name}' to stall '${selectedStall.stall_number}' (OR #${trimmedOr}).`, 
-        'Tenant', 
+        'Register Tenant',
+        `Registered tenant '${formData.full_name}' to stall '${selectedStall.stall_number}' ` +
+        `(OR #${trimmedOr}, reg. date ${formData.registration_date}).${billSummary}`,
+        'Tenant',
         tenantData.id
       );
 
-      setSuccessMsg(`Tenant ${formData.full_name} registered successfully!`);
-      
-      setFormData({ full_name: '', date_of_birth: '', contact_number: '', street: '', barangay: '', city: '', stall_id: '', business_name: '' });
+      setSuccessMsg(
+        `Tenant ${formData.full_name} registered successfully!` +
+        (pendingBills.length > 0
+          ? ` ${pendingBills.length} unpaid month(s) have been automatically billed.`
+          : '')
+      );
+
+      setFormData({
+        full_name: '',
+        date_of_birth: '',
+        contact_number: '',
+        street: '',
+        barangay: '',
+        city: '',
+        stall_id: '',
+        business_name: '',
+        registration_date: dateKey(new Date())
+      });
+      setRegDateDisplay(toDisplayDate(dateKey(new Date())));
       setOrNumber('');
-      
-      fetchData(); 
+
+      fetchData();
 
     } catch (error: any) {
-      setErrorMsg(error.message || "An error occurred while registering the tenant.");
+      setErrorMsg(error.message || 'An error occurred while registering the tenant.');
     } finally {
       setIsSubmitting(false);
     }
@@ -258,7 +378,6 @@ export default function RegisterTenant() {
       </div>
 
       <div className="form-container">
-        
         <div className="form-header-bar">
           <div className="form-header-title">
             <i className="fa-solid fa-file-invoice"></i> Tenant Registration Form
@@ -270,7 +389,6 @@ export default function RegisterTenant() {
 
         <div className="form-body">
           <form onSubmit={handleSubmit}>
-            
             <div className="form-section">
               <div className="section-header">
                 <div className="section-icon"><i className="fa-solid fa-user"></i></div>
@@ -329,7 +447,7 @@ export default function RegisterTenant() {
                       </option>
                     ))}
                   </select>
-                  
+
                   {selectedStallDetails && (
                     <div style={{ marginTop: '8px', padding: '8px 12px', background: '#eaf1ec', borderRadius: '6px', fontSize: '13px', color: '#217346', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #d5dfd8' }}>
                       <i className={`fa-solid ${selectedStallDetails.icon_class}`}></i>
@@ -337,19 +455,75 @@ export default function RegisterTenant() {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="input-group">
                   <label>Business Name <span className="required">*</span></label>
                   <input type="text" name="business_name" value={formData.business_name} onChange={handleChange} placeholder="Business Name" required />
                 </div>
-                
-                <div className="input-group" style={{ gridColumn: 'span 2' }}>
+
+                <div className="input-group">
+                  <label>Registration Date <span className="required">*</span></label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      name="registration_date"
+                      value={regDateDisplay}
+                      onChange={handleRegDateChange}
+                      placeholder="MM/DD/YYYY"
+                      maxLength={10}
+                      required
+                      style={{ width: '100%', paddingRight: '40px' }}
+                    />
+                    
+                    <i
+                      className="fa-regular fa-calendar"
+                      style={{
+                        position: 'absolute',
+                        right: '14px',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        fontSize: '16px'
+                      }}
+                      onClick={() => {
+                        const hiddenInput = document.getElementById('hidden-date-picker') as HTMLInputElement;
+                        if (hiddenInput) {
+                          if (hiddenInput.showPicker) hiddenInput.showPicker();
+                          else hiddenInput.click();
+                        }
+                      }}
+                      title="Open Calendar"
+                    ></i>
+
+                    <input
+                      id="hidden-date-picker"
+                      type="date"
+                      value={formData.registration_date}
+                      onChange={(e) => {
+                        setFormData({ ...formData, registration_date: e.target.value });
+                        setRegDateDisplay(toDisplayDate(e.target.value));
+                      }}
+                      max={dateKey(new Date())}
+                      style={{
+                        position: 'absolute',
+                        opacity: 0,
+                        width: 0,
+                        height: 0,
+                        border: 'none',
+                        padding: 0,
+                        pointerEvents: 'none'
+                      }}
+                      tabIndex={-1}
+                    />
+                  </div>
+                </div>
+
+                <div className="input-group">
                   <label>Official Receipt No. <span className="required">*</span></label>
-                  <input 
-                    type="text" 
-                    value={orNumber} 
-                    onChange={(e) => setOrNumber(e.target.value)} 
-                    placeholder="Enter OR number from treasury" 
+                  <input
+                    type="text"
+                    value={orNumber}
+                    onChange={(e) => setOrNumber(e.target.value)}
+                    placeholder="Enter OR number from treasury"
                     autoComplete="off"
                     maxLength={12}
                     required
@@ -360,7 +534,12 @@ export default function RegisterTenant() {
 
             <div className="form-actions">
               <button type="button" className="btn-outline" onClick={() => {
-                setFormData({ full_name: '', date_of_birth: '', contact_number: '', street: '', barangay: '', city: '', stall_id: '', business_name: '' });
+                setFormData({
+                  full_name: '', date_of_birth: '', contact_number: '',
+                  street: '', barangay: '', city: '', stall_id: '',
+                  business_name: '', registration_date: dateKey(new Date())
+                });
+                setRegDateDisplay(toDisplayDate(dateKey(new Date())));
                 setOrNumber('');
               }}>
                 Clear Form
@@ -406,7 +585,6 @@ export default function RegisterTenant() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
