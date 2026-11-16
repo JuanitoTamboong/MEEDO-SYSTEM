@@ -11,7 +11,7 @@ const monthsList = [
 
 export default function FinancialReports() {
   const [activeTab, setActiveTab] = useState('monthly');
-  
+
   // Filters
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -20,14 +20,18 @@ export default function FinancialReports() {
   // Data
   const [monthlyPayments, setMonthlyPayments] = useState<any[]>([]);
   const [overduePayments, setOverduePayments] = useState<any[]>([]);
-  const [annualData, setAnnualData] = useState<Record<number, { total: number, count: number }>>({});
-  
+  const [annualData, setAnnualData] = useState<
+    Record<number, { rent: number; penalty: number; total: number; count: number }>
+  >({});
+
   // Metrics
   const [totalCollections, setTotalCollections] = useState(0);
+  const [totalPenalties, setTotalPenalties] = useState(0);
   const [paymentCount, setPaymentCount] = useState(0);
   const [avgPayment, setAvgPayment] = useState(0);
   const [collectionRate, setCollectionRate] = useState(0);
   const [annualTotal, setAnnualTotal] = useState(0);
+  const [annualPenaltyTotal, setAnnualPenaltyTotal] = useState(0);
 
   const [isLoading, setIsLoading] = useState(true);
 
@@ -57,11 +61,12 @@ export default function FinancialReports() {
       const { data: stallsData } = await supabase.from('stalls').select('id, stall_number, section_id');
       const { data: sectionsData } = await supabase.from('sections').select('id, section_name');
       const { data: tenantsData } = await supabase.from('tenants').select('stall_id, full_name').eq('status', 'active');
-      
+
       const stallMap = new Map(stallsData?.map(s => [s.id, s]) || []);
       const sectionMap = new Map(sectionsData?.map(s => [s.id, s]) || []);
       const tenantMap = new Map(tenantsData?.map(t => [t.stall_id, t.full_name]) || []);
 
+      // ---------- MONTHLY ----------
       const { data: paidData } = await supabase
         .from('payments')
         .select('*')
@@ -75,35 +80,53 @@ export default function FinancialReports() {
           const stall = stallMap.get(p.stall_id);
           const section = stall ? sectionMap.get(stall.section_id) : null;
           const realTenantName = tenantMap.get(p.stall_id) || p.tenant_name;
-          
-          return { 
-            ...p, 
-            stall_number: stall?.stall_number, 
+
+          const baseAmount = Number(p.amount) || 0;
+          const penalty = Number(p.penalty) || 0;
+          const totalPaid = baseAmount + penalty;
+
+          return {
+            ...p,
+            stall_number: stall?.stall_number,
             section_name: section?.section_name,
-            display_tenant_name: realTenantName 
+            display_tenant_name: realTenantName,
+            base_amount: baseAmount,
+            penalty,
+            total_paid: totalPaid,
           };
         });
-        
+
         setMonthlyPayments(enriched);
         setPaymentCount(enriched.length);
-        const total = enriched.reduce((sum, p) => sum + Number(p.amount), 0);
-        setTotalCollections(total);
-        setAvgPayment(enriched.length > 0 ? total / enriched.length : 0);
+
+        const totalRent = enriched.reduce((sum, p) => sum + p.base_amount, 0);
+        const totalPen = enriched.reduce((sum, p) => sum + p.penalty, 0);
+        const grandTotal = totalRent + totalPen;
+
+        setTotalCollections(grandTotal);
+        setTotalPenalties(totalPen);
+        setAvgPayment(enriched.length > 0 ? grandTotal / enriched.length : 0);
       } else {
         setMonthlyPayments([]);
         setPaymentCount(0);
         setTotalCollections(0);
+        setTotalPenalties(0);
         setAvgPayment(0);
       }
 
-      const { count: tenantCount } = await supabase.from('stalls').select('*', { count: 'exact', head: true }).eq('status', 'Occupied');
+      // Collection rate
+      const { count: tenantCount } = await supabase
+        .from('stalls')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'Occupied');
       const tenants = tenantCount || 0;
       setCollectionRate(tenants > 0 ? Math.round(((paidData?.length || 0) / tenants) * 100) : 0);
 
+      // ---------- OVERDUE ----------
       const { data: pendingBills } = await supabase
         .from('payments')
         .select('*')
-        .in('status', ['Pending', 'Overdue']); 
+        .in('status', ['Pending', 'Overdue']);
 
       if (pendingBills) {
         const today = new Date();
@@ -114,18 +137,20 @@ export default function FinancialReports() {
           const graceDays = o.grace_period_days || 3;
           const penaltyStartDate = new Date(dueDate);
           penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
-          
+
           if (today > penaltyStartDate) {
             const penaltyAmount = Number(o.amount) * 0.25;
-            const daysLate = Math.ceil((today.getTime() - penaltyStartDate.getTime()) / (1000 * 3600 * 24));
-            
-            return { 
-              ...o, 
+            const daysLate = Math.ceil(
+              (today.getTime() - penaltyStartDate.getTime()) / (1000 * 3600 * 24)
+            );
+
+            return {
+              ...o,
               status: 'Overdue',
               penalty: penaltyAmount,
               total_due: Number(o.amount) + penaltyAmount,
               days_late: daysLate,
-              penalty_start_date: penaltyStartDate
+              penalty_start_date: penaltyStartDate,
             };
           }
           return null;
@@ -136,45 +161,57 @@ export default function FinancialReports() {
           const stall = stallMap.get(o.stall_id);
           const section = stall ? sectionMap.get(stall.section_id) : null;
           const realTenantName = tenantMap.get(o.stall_id) || o.tenant_name;
-          
-          return { 
-            ...o, 
-            stall_number: stall?.stall_number, 
-            section_name: section?.section_name,
-            display_tenant_name: realTenantName 
-          };
-        }).filter(Boolean); 
 
-        enrichedOverdue.sort((a, b) => new Date(a!.due_date).getTime() - new Date(b!.due_date).getTime());
+          return {
+            ...o,
+            stall_number: stall?.stall_number,
+            section_name: section?.section_name,
+            display_tenant_name: realTenantName,
+          };
+        }).filter(Boolean);
+
+        enrichedOverdue.sort(
+          (a, b) => new Date(a!.due_date).getTime() - new Date(b!.due_date).getTime()
+        );
         setOverduePayments(enrichedOverdue as any[]);
       }
 
+      // ---------- ANNUAL ----------
       const { data: annualRaw } = await supabase
         .from('payments')
-        .select('amount, month_covered')
+        .select('amount, penalty, month_covered')
         .eq('status', 'Paid')
         .gte('month_covered', `${selectedYear}-01-01`)
         .lte('month_covered', `${selectedYear}-12-31`);
 
       if (annualRaw) {
-        const grouped: Record<number, { total: number, count: number }> = {};
+        const grouped: Record<number, { rent: number; penalty: number; total: number; count: number }> = {};
         let runningTotal = 0;
+        let runningPenalty = 0;
 
         annualRaw.forEach(p => {
           if (!p.month_covered) return;
           const month = new Date(p.month_covered).getMonth() + 1;
-          if (!grouped[month]) grouped[month] = { total: 0, count: 0 };
-          grouped[month].total += Number(p.amount);
+          const rent = Number(p.amount) || 0;
+          const penalty = Number(p.penalty) || 0;
+          const total = rent + penalty;
+
+          if (!grouped[month]) grouped[month] = { rent: 0, penalty: 0, total: 0, count: 0 };
+          grouped[month].rent += rent;
+          grouped[month].penalty += penalty;
+          grouped[month].total += total;
           grouped[month].count += 1;
-          runningTotal += Number(p.amount);
+
+          runningTotal += total;
+          runningPenalty += penalty;
         });
 
         setAnnualData(grouped);
         setAnnualTotal(runningTotal);
+        setAnnualPenaltyTotal(runningPenalty);
       }
-
     } catch (err) {
-      console.error("Error loading financial data:", err);
+      console.error('Error loading financial data:', err);
     } finally {
       setIsLoading(false);
     }
@@ -185,14 +222,18 @@ export default function FinancialReports() {
     if (!table) return;
 
     const rows = table.querySelectorAll('tr');
-    const csv: string[] = []; 
-    
+    const csv: string[] = [];
+
     rows.forEach(row => {
       const cells = row.querySelectorAll('td, th');
       const rowData: string[] = [];
       cells.forEach(cell => {
         let text = cell.textContent?.trim() || '';
-        text = text.replace(/\s+/g, ' ').replace(/[₱,]/g, '');
+        text = text
+          .replace(/\+/g, '')          // remove leading plus (penalty indicator)
+          .replace(/[₱,]/g, '')         // strip currency + commas
+          .replace(/\s+/g, ' ')
+          .trim();
         rowData.push(`"${text}"`);
       });
       csv.push(rowData.join(','));
@@ -204,6 +245,7 @@ export default function FinancialReports() {
     a.href = url;
     a.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   if (isLoading) {
@@ -262,7 +304,10 @@ export default function FinancialReports() {
               <div className="metric-data">
                 <div className="metric-label">Total Collections</div>
                 <div className="metric-value">₱{totalCollections.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                <div className="metric-sub">{monthsList[selectedMonth - 1].name} {selectedYear}</div>
+                <div className="metric-sub">
+                  {monthsList[selectedMonth - 1].name} {selectedYear}
+                  {totalPenalties > 0 && ` (incl. ₱${totalPenalties.toLocaleString(undefined, { minimumFractionDigits: 2 })} penalty)`}
+                </div>
               </div>
             </div>
             <div className="metric-box">
@@ -278,7 +323,7 @@ export default function FinancialReports() {
               <div className="metric-data">
                 <div className="metric-label">Average Payment</div>
                 <div className="metric-value">₱{avgPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                <div className="metric-sub">Per transaction</div>
+                <div className="metric-sub">Per transaction (incl. penalty)</div>
               </div>
             </div>
             <div className="metric-box">
@@ -306,22 +351,35 @@ export default function FinancialReports() {
                     <th>Stall #</th>
                     <th>Tenant</th>
                     <th>Section</th>
-                    <th>Amount</th>
+                    <th>Rent</th>
+                    <th>Penalty</th>
+                    <th>Total</th>
                     <th>Reference</th>
                   </tr>
                 </thead>
                 <tbody>
                   {monthlyPayments.length === 0 ? (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No payments found for this period.</td></tr>
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                        No payments found for this period.
+                      </td>
+                    </tr>
                   ) : (
                     monthlyPayments.map(p => (
                       <tr key={p.id}>
-                        {/* 🛑 FIX: Use due_date instead of payment_date to show the Coverage Date */}
                         <td>{new Date(p.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                         <td><strong>{p.stall_number || '—'}</strong></td>
                         <td>{p.display_tenant_name || '—'}</td>
                         <td>{p.section_name || '—'}</td>
-                        <td style={{ fontWeight: 600, color: '#0f172a' }}>₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td>₱{p.base_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td style={{ color: p.penalty > 0 ? '#dc2626' : 'inherit' }}>
+                          {p.penalty > 0
+                            ? `+ ₱${p.penalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                            : '—'}
+                        </td>
+                        <td style={{ fontWeight: 600, color: '#0f172a' }}>
+                          ₱{p.total_paid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
                         <td><span className="badge-ref">{p.receipt_number || `PAY-${p.id}`}</span></td>
                       </tr>
                     ))
@@ -351,7 +409,10 @@ export default function FinancialReports() {
               <div className="metric-data">
                 <div className="metric-label">Annual Total Collections</div>
                 <div className="metric-value">₱{annualTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                <div className="metric-sub">For the year {selectedYear}</div>
+                <div className="metric-sub">
+                  For the year {selectedYear}
+                  {annualPenaltyTotal > 0 && ` (incl. ₱${annualPenaltyTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} penalty)`}
+                </div>
               </div>
             </div>
           </div>
@@ -369,19 +430,31 @@ export default function FinancialReports() {
                   <tr>
                     <th>Month</th>
                     <th>Payments</th>
-                    <th>Total Amount</th>
+                    <th>Rent</th>
+                    <th>Penalty</th>
+                    <th>Total</th>
                     <th>Average per Payment</th>
                   </tr>
                 </thead>
                 <tbody>
                   {monthsList.map(m => {
                     const data = annualData[m.num];
+                    const total = data?.total || 0;
+                    const count = data?.count || 0;
+                    const penalty = data?.penalty || 0;
+
                     return (
                       <tr key={m.num}>
                         <td><strong>{m.name}</strong></td>
-                        <td>{data?.count || 0}</td>
-                        <td>₱{(data?.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td>₱{(data ? (data.total / data.count) : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td>{count}</td>
+                        <td>₱{(data?.rent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td style={{ color: penalty > 0 ? '#dc2626' : 'inherit' }}>
+                          {penalty > 0
+                            ? `+ ₱${penalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                            : '—'}
+                        </td>
+                        <td><strong>₱{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
+                        <td>₱{(count > 0 ? total / count : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       </tr>
                     );
                   })}
@@ -397,7 +470,9 @@ export default function FinancialReports() {
         <div className="report-content active">
           <div className="data-panel">
             <div className="data-header">
-              <h2 style={{ color: '#dc2626' }}><i className="fa-solid fa-exclamation-triangle"></i> Overdue Accounts (25% Penalty)</h2>
+              <h2 style={{ color: '#dc2626' }}>
+                <i className="fa-solid fa-exclamation-triangle"></i> Overdue Accounts (25% Penalty)
+              </h2>
               <button className="btn-secondary" onClick={() => exportTable('overdueTable', 'overdue-report')}>
                 <i className="fa-solid fa-download"></i> Export
               </button>
@@ -418,22 +493,30 @@ export default function FinancialReports() {
                 </thead>
                 <tbody>
                   {overduePayments.length === 0 ? (
-                    <tr><td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No overdue accounts found.</td></tr>
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                        No overdue accounts found.
+                      </td>
+                    </tr>
                   ) : (
-                    overduePayments.map(o => {
-                      return (
-                        <tr key={o.id}>
-                          <td><strong style={{ color: '#dc2626' }}>{o.stall_number || '—'}</strong></td>
-                          <td>{o.display_tenant_name || '—'}</td>
-                          <td>{o.section_name || '—'}</td>
-                          <td>₱{Number(o.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td>{new Date(o.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                          <td>{o.days_late} days</td>
-                          <td style={{ color: '#dc2626' }}>+ ₱{Number(o.penalty).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td><strong style={{ color: '#dc2626' }}>₱{Number(o.total_due).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
-                        </tr>
-                      );
-                    })
+                    overduePayments.map(o => (
+                      <tr key={o.id}>
+                        <td><strong style={{ color: '#dc2626' }}>{o.stall_number || '—'}</strong></td>
+                        <td>{o.display_tenant_name || '—'}</td>
+                        <td>{o.section_name || '—'}</td>
+                        <td>₱{Number(o.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td>{new Date(o.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                        <td>{o.days_late} days</td>
+                        <td style={{ color: '#dc2626' }}>
+                          + ₱{Number(o.penalty).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td>
+                          <strong style={{ color: '#dc2626' }}>
+                            ₱{Number(o.total_due).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </strong>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
