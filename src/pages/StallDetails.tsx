@@ -142,13 +142,13 @@ export default function StallDetails() {
         if (nextPending) {
           setCurrentPayment(nextPending);
         } else if (latestPaid) {
-          const regDate = activeTenant?.registration_date ? new Date(activeTenant.registration_date) : new Date();
-          const nextDue = new Date();
-          nextDue.setDate(regDate.getDate());
-
-          if (nextDue <= new Date()) {
-            nextDue.setMonth(nextDue.getMonth() + 1);
-          }
+          const fixedDay = activeTenant?.registration_date ? new Date(activeTenant.registration_date).getDate() : 15;
+          
+          let baseDate = latestPaid.month_covered ? new Date(latestPaid.month_covered) : new Date(latestPaid.due_date);
+          baseDate.setDate(fixedDay);
+          
+          const nextDue = new Date(baseDate);
+          nextDue.setMonth(nextDue.getMonth() + 1);
 
           setCurrentPayment({
             ...latestPaid,
@@ -486,16 +486,9 @@ export default function StallDetails() {
   const paymentStatus = currentPayment?.status || 'Unpaid';
   const statusClass = paymentStatus.toLowerCase() === 'overdue' ? 'overdue' : (paymentStatus.toLowerCase() === 'paid' ? 'paid' : 'unpaid');
 
-  let billingCycleText = '1st of the month';
-  if (tenant?.registration_date) {
-    const day = new Date(tenant.registration_date).getDate();
-    const suffix = ['th', 'st', 'nd', 'rd'][(day % 10 > 3 ? 0 : (day % 100 - day % 10 != 10 ? day % 10 : 0))] || 'th';
-    billingCycleText = `${day}${suffix} of the month`;
-  } else if (currentPayment?.due_date) {
-    const day = new Date(currentPayment.due_date).getDate();
-    const suffix = ['th', 'st', 'nd', 'rd'][(day % 10 > 3 ? 0 : (day % 100 - day % 10 != 10 ? day % 10 : 0))] || 'th';
-    billingCycleText = `${day}${suffix} of the month`;
-  }
+  const fixedDay = tenant?.registration_date ? new Date(tenant.registration_date).getDate() : (currentPayment?.due_date ? new Date(currentPayment.due_date).getDate() : 1);
+  const suffix = ['th', 'st', 'nd', 'rd'][(fixedDay % 10 > 3 ? 0 : (fixedDay % 100 - fixedDay % 10 != 10 ? fixedDay % 10 : 0))] || 'th';
+  const billingCycleText = `${fixedDay}${suffix} of the month`;
 
   const payableBills = unpaidBills.filter(b => !String(b.month_covered).includes('-partial'));
   const maxMonthsCanPay = Math.max(1, payableBills.length);
