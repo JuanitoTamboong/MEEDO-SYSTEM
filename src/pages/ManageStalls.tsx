@@ -3,7 +3,6 @@ import { supabase } from '../supabase/lib/supabase';
 import { recordAuditLog } from '../supabase/lib/audit';
 import '../css/manage-stalls.css';
 
-// Interfaces
 interface Section {
   id: number;
   section_name: string;
@@ -36,14 +35,16 @@ export default function ManageStalls() {
   const [sections, setSections] = useState<Section[]>([]);
   const [stalls, setStalls] = useState<Stall[]>([]);
   
-  // Form States
   const [newSection, setNewSection] = useState({ name: '', icon: '' });
   const [newStall, setNewStall] = useState({ sectionId: '', rent: '2000' });
   
-  // Modal States
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, type: 'section' | 'stall', id: number, name: string, extra?: string } | null>(null);
   const [editRentModal, setEditRentModal] = useState<{ isOpen: boolean, stallId: number, stallNumber: string, currentRent: number } | null>(null);
   const [editRentValue, setEditRentValue] = useState('');
+
+  // 🛑 STATES PARA SA LOADING, SUCCESS AT ERROR
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -57,61 +58,74 @@ export default function ManageStalls() {
     if (stallsData) setStalls(stallsData);
   }
 
-  // --- ACTIONS ---
-
   const handleAddSection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSection.name || !newSection.icon) return alert("Please fill in all fields");
 
-    // Check if exists
     const exists = sections.find(s => s.section_name.toLowerCase() === newSection.name.toLowerCase());
     if (exists) return alert("Section already exists!");
 
-    // Auto-assign display order (append to end)
-    const nextOrder = sections.length > 0 ? Math.max(...sections.map(s => s.display_order)) + 1 : 0;
+    setIsActionLoading(true);
 
-    const { data, error } = await supabase.from('sections').insert([{
-      section_name: newSection.name,
-      icon_class: newSection.icon,
-      display_order: nextOrder
-    }]).select();
+    try {
+      const nextOrder = sections.length > 0 ? Math.max(...sections.map(s => s.display_order)) + 1 : 0;
 
-    if (error) return alert(error.message);
-    
-    await recordAuditLog('Add Section', `Added market section '${newSection.name}'.`, 'Section', data[0].id);
-    setNewSection({ name: '', icon: '' });
-    fetchData();
+      const { data, error } = await supabase.from('sections').insert([{
+        section_name: newSection.name,
+        icon_class: newSection.icon,
+        display_order: nextOrder
+      }]).select();
+
+      if (error) throw error;
+      
+      await recordAuditLog('Add Section', `Added market section '${newSection.name}'.`, 'Section', data[0].id);
+      setNewSection({ name: '', icon: '' });
+      fetchData();
+      setSuccessMsg(`Section "${newSection.name}" has been successfully created.`);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
   const handleAddStall = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStall.sectionId) return alert("Please select a section");
 
-    const sectionIdNum = Number(newStall.sectionId);
-    const prefix = `S${sectionIdNum}`;
-    
-    // Auto-generate stall number
-    const existingStalls = stalls.filter(s => s.section_id === sectionIdNum);
-    let nextNum = 1;
-    let stallNumber = '';
-    while (true) {
-      stallNumber = `${prefix}-${String(nextNum).padStart(3, '0')}`;
-      if (!existingStalls.find(s => s.stall_number === stallNumber)) break;
-      nextNum++;
+    setIsActionLoading(true);
+
+    try {
+      const sectionIdNum = Number(newStall.sectionId);
+      const prefix = `S${sectionIdNum}`;
+      
+      const existingStalls = stalls.filter(s => s.section_id === sectionIdNum);
+      let nextNum = 1;
+      let stallNumber = '';
+      while (true) {
+        stallNumber = `${prefix}-${String(nextNum).padStart(3, '0')}`;
+        if (!existingStalls.find(s => s.stall_number === stallNumber)) break;
+        nextNum++;
+      }
+
+      const { data, error } = await supabase.from('stalls').insert([{
+        stall_number: stallNumber,
+        section_id: sectionIdNum,
+        status: 'Vacant',
+        monthly_rent: Number(newStall.rent)
+      }]).select();
+
+      if (error) throw error;
+
+      await recordAuditLog('Add Stall', `Added vacant stall '${stallNumber}'.`, 'Stall', data[0].id);
+      setNewStall({ ...newStall, sectionId: '' });
+      fetchData();
+      setSuccessMsg(`Stall "${stallNumber}" has been successfully created.`);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsActionLoading(false);
     }
-
-    const { data, error } = await supabase.from('stalls').insert([{
-      stall_number: stallNumber,
-      section_id: sectionIdNum,
-      status: 'Vacant',
-      monthly_rent: Number(newStall.rent)
-    }]).select();
-
-    if (error) return alert(error.message);
-
-    await recordAuditLog('Add Stall', `Added vacant stall '${stallNumber}'.`, 'Stall', data[0].id);
-    setNewStall({ ...newStall, sectionId: '' });
-    fetchData();
   };
 
   const handleEditRent = async () => {
@@ -119,39 +133,81 @@ export default function ManageStalls() {
     const rent = Number(editRentValue);
     if (rent <= 0) return;
 
-    const { error } = await supabase.from('stalls').update({ monthly_rent: rent }).eq('id', editRentModal.stallId);
-    if (error) return alert(error.message);
+    setIsActionLoading(true);
 
-    // Also update unpaid payments for this stall
-    await supabase.from('payments').update({ amount: rent })
-      .eq('stall_id', editRentModal.stallId)
-      .neq('status', 'Paid');
+    try {
+      const { error } = await supabase.from('stalls').update({ monthly_rent: rent }).eq('id', editRentModal.stallId);
+      if (error) throw error;
 
-    await recordAuditLog('Edit Stall Rent', `Updated monthly rent for stall #${editRentModal.stallId} to ₱${rent.toFixed(2)}.`, 'Stall', editRentModal.stallId);
-    setEditRentModal(null);
-    fetchData();
+      await supabase.from('payments').update({ amount: rent })
+        .eq('stall_id', editRentModal.stallId)
+        .neq('status', 'Paid');
+
+      await recordAuditLog('Edit Stall Rent', `Updated monthly rent for stall #${editRentModal.stallId} to ₱${rent.toFixed(2)}.`, 'Stall', editRentModal.stallId);
+      setEditRentModal(null);
+      fetchData();
+      setSuccessMsg(`Rent for stall "${editRentModal.stallNumber}" has been updated to ₱${rent.toFixed(2)}.`);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
   const executeDelete = async () => {
     if (!confirmModal) return;
-    
-    if (confirmModal.type === 'section') {
-      await supabase.from('stalls').delete().eq('section_id', confirmModal.id);
-      await supabase.from('sections').delete().eq('id', confirmModal.id);
-      await recordAuditLog('Delete Section', `Deleted section #${confirmModal.id} and its stalls.`, 'Section', confirmModal.id);
-    } else {
-      await supabase.from('stalls').delete().eq('id', confirmModal.id);
-      await recordAuditLog('Delete Stall', `Deleted stall #${confirmModal.id}.`, 'Stall', confirmModal.id);
-    }
+    setIsActionLoading(true);
 
-    setConfirmModal(null);
-    fetchData();
+    try {
+      if (confirmModal.type === 'section') {
+        const { data: sectionStalls } = await supabase.from('stalls').select('id').eq('section_id', confirmModal.id);
+        
+        if (sectionStalls) {
+          for (const stall of sectionStalls) {
+            const { data: tenants } = await supabase.from('tenants').select('id').eq('stall_id', stall.id);
+            
+            if (tenants) {
+              for (const t of tenants) {
+                await supabase.from('payments').delete().eq('stall_id', stall.id);
+                await supabase.from('contracts').delete().eq('tenant_id', t.id);
+                await supabase.from('tenants').delete().eq('id', t.id);
+              }
+            }
+          }
+          await supabase.from('stalls').delete().eq('section_id', confirmModal.id);
+        }
+
+        await supabase.from('sections').delete().eq('id', confirmModal.id);
+        await recordAuditLog('Delete Section', `Deleted section #${confirmModal.id} and all connected records.`, 'Section', confirmModal.id);
+      } else {
+        const { data: tenants } = await supabase.from('tenants').select('id').eq('stall_id', confirmModal.id);
+
+        if (tenants) {
+          for (const t of tenants) {
+            await supabase.from('payments').delete().eq('stall_id', confirmModal.id);
+            await supabase.from('contracts').delete().eq('tenant_id', t.id);
+            await supabase.from('tenants').delete().eq('id', t.id);
+          }
+        }
+
+        await supabase.from('stalls').delete().eq('id', confirmModal.id);
+        await recordAuditLog('Delete Stall', `Deleted stall #${confirmModal.id} and all connected records.`, 'Stall', confirmModal.id);
+      }
+
+      await fetchData();
+      setConfirmModal(null);
+      setSuccessMsg(`Successfully deleted ${confirmModal.type === 'section' ? 'Section' : 'Stall'} and all related records.`);
+    } catch (err: any) {
+      console.error(err);
+      alert("Failed to delete. Please check console for errors.");
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
   return (
     <div className="content-wrapper">
       
-      {/* Header */}
       <div className="page-header">
         <div>
           <h1>Manage Stalls</h1>
@@ -164,7 +220,6 @@ export default function ManageStalls() {
         </div>
       </div>
 
-      {/* Metrics */}
       <div className="metric-row">
         <div className="metric-box">
           <div className="metric-icon green"><i className="fa-solid fa-door-open"></i></div>
@@ -182,10 +237,7 @@ export default function ManageStalls() {
         </div>
       </div>
 
-      {/* Config Forms */}
       <div className="config-grid">
-        
-        {/* Create Section */}
         <div className="config-panel">
           <div className="config-header">
             <h3><i className="fa-solid fa-layer-group"></i> Create Section</h3>
@@ -212,11 +264,12 @@ export default function ManageStalls() {
                 {Object.keys(icon_list).map(name => <option key={name} value={name}>{name}</option>)}
               </select>
             </div>
-            <button type="submit" className="btn-primary"><i className="fa-solid fa-plus"></i> Add</button>
+            <button type="submit" className="btn-primary" disabled={isActionLoading}>
+              {isActionLoading ? 'Adding...' : <><i className="fa-solid fa-plus"></i> Add</>}
+            </button>
           </form>
         </div>
 
-        {/* Create Stall */}
         <div className="config-panel">
           <div className="config-header">
             <h3><i className="fa-solid fa-store"></i> Create Stall</h3>
@@ -243,12 +296,13 @@ export default function ManageStalls() {
                 step="0.01" required 
               />
             </div>
-            <button type="submit" className="btn-primary outline"><i className="fa-solid fa-plus"></i> Add</button>
+            <button type="submit" className="btn-primary outline" disabled={isActionLoading}>
+              {isActionLoading ? 'Adding...' : <><i className="fa-solid fa-plus"></i> Add</>}
+            </button>
           </form>
         </div>
       </div>
 
-      {/* Data Panel */}
       <div className="data-panel">
         <div className="data-header">
           <h2>Stall Directory</h2>
@@ -316,7 +370,7 @@ export default function ManageStalls() {
                             </button>
                             <button 
                               className="btn-text danger"
-                              onClick={() => setConfirmModal({ isOpen: true, type: 'stall', id: stall.id, name: stall.stall_number, extra: 'Related payment records will be lost.' })}
+                              onClick={() => setConfirmModal({ isOpen: true, type: 'stall', id: stall.id, name: stall.stall_number, extra: 'WARNING: Deleting this will also wipe out the tenant, contract, and payment history connected to this stall.' })}
                             >
                               <i className="fa-solid fa-trash"></i> Delete
                             </button>
@@ -332,26 +386,26 @@ export default function ManageStalls() {
         )}
       </div>
 
-      {/* Delete Confirmation Modal */}
       {confirmModal && confirmModal.isOpen && (
-        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setConfirmModal(null) }}>
+        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget && !isActionLoading) setConfirmModal(null) }}>
           <div className="modal-box">
-            <div className="modal-icon danger-icon"><i className="fa-solid fa-trash"></i></div>
+            <div className="modal-icon danger-icon"><i className="fa-solid fa-triangle-exclamation"></i></div>
             <h3>Delete {confirmModal.type === 'section' ? 'Section' : 'Stall'}</h3>
-            <p>Are you sure you want to delete this {confirmModal.type}?</p>
-            <div className="modal-details">
+            <p>Are you sure you want to delete this {confirmModal.type}? This action cannot be undone.</p>
+            <div className="modal-details" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}>
               <strong>{confirmModal.name}</strong><br/>
               {confirmModal.extra}
             </div>
             <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setConfirmModal(null)}>Cancel</button>
-              <button className="btn-danger" onClick={executeDelete}>Delete</button>
+              <button className="btn-cancel" onClick={() => setConfirmModal(null)} disabled={isActionLoading}>Cancel</button>
+              <button className="btn-danger" onClick={executeDelete} disabled={isActionLoading}>
+                {isActionLoading ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit Rent Modal */}
       {editRentModal && editRentModal.isOpen && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setEditRentModal(null) }}>
           <div className="modal-box">
@@ -373,9 +427,24 @@ export default function ManageStalls() {
               />
             </div>
             <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setEditRentModal(null)}>Cancel</button>
-              <button className="btn-primary" onClick={handleEditRent}>Save Changes</button>
+              <button className="btn-cancel" onClick={() => setEditRentModal(null)} disabled={isActionLoading}>Cancel</button>
+              <button className="btn-primary" onClick={handleEditRent} disabled={isActionLoading}>
+                {isActionLoading ? 'Saving...' : 'Save Changes'}
+              </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setSuccessMsg('') }}>
+          <div className="modal-box" style={{ textAlign: 'center', maxWidth: '400px', width: '100%' }}>
+            <div className="modal-icon info-icon" style={{ margin: '0 auto 16px', borderRadius: '50%', width: '56px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ecfdf5', color: '#059669' }}>
+              <i className="fa-solid fa-check" style={{ fontSize: '24px' }}></i>
+            </div>
+            <h3 style={{ fontSize: '20px', marginBottom: '8px' }}>Success</h3>
+            <p style={{ fontSize: '15px', color: '#64748b', marginBottom: '24px' }}>{successMsg}</p>
+            <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setSuccessMsg('')}>Okay</button>
           </div>
         </div>
       )}
