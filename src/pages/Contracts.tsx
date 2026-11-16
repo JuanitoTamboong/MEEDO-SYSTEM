@@ -23,7 +23,10 @@ export default function Contracts() {
 
   const [newEndDate, setNewEndDate] = useState('');
   const [chargeRenewalFee, setChargeRenewalFee] = useState(false);
-  const [renewalFeeAmount, setRenewalFeeAmount] = useState(100); 
+  
+  // GINTO: Ginawang string ("100") imbes na number (100) para pwedeng i-backspace nang tuluyan
+  const [renewalFeeAmount, setRenewalFeeAmount] = useState("100"); 
+  
   const [extendOrNumber, setExtendOrNumber] = useState('');
 
   const [payMonths, setPayMonths] = useState(1);
@@ -167,7 +170,9 @@ export default function Contracts() {
     setSelectedContract(contract);
     setExtendOrNumber('');
     setChargeRenewalFee(false);
-    setRenewalFeeAmount(100);
+    
+    // GINTO: String "100" imbes na number
+    setRenewalFeeAmount("100");
 
     const baseDate = contract.end_date ? new Date(contract.end_date) : new Date();
     baseDate.setFullYear(baseDate.getFullYear() + 5);
@@ -194,6 +199,10 @@ export default function Contracts() {
     }
 
     const trimmedOr = extendOrNumber.trim();
+    
+    // GINTO: I-parse muna ang string bago i-check
+    const parsedFee = Number(renewalFeeAmount);
+
     if (chargeRenewalFee) {
       if (!trimmedOr) {
         setErrorMsg("Please enter the Official Receipt number to pay the renewal fee.");
@@ -201,6 +210,10 @@ export default function Contracts() {
       }
       if (!/^\d+$/.test(trimmedOr)) {
         setErrorMsg("Receipt number must contain numbers only (e.g., 000851).");
+        return;
+      }
+      if (parsedFee <= 0) {
+        setErrorMsg("Please enter a valid renewal fee amount.");
         return;
       }
     }
@@ -225,7 +238,7 @@ export default function Contracts() {
           start_date: finalStartDate,
           end_date: newEndDate,
           status: 'Active',
-          renewal_fee: chargeRenewalFee ? renewalFeeAmount : 0,
+          renewal_fee: chargeRenewalFee ? parsedFee : 0, // GINTO: parsedFee na
           renewal_fee_paid: chargeRenewalFee,
           renewal_fee_receipt: chargeRenewalFee ? trimmedOr : null
         }]).select().single();
@@ -237,7 +250,7 @@ export default function Contracts() {
           start_date: finalStartDate,
           end_date: newEndDate, 
           status: 'Active',
-          renewal_fee: chargeRenewalFee ? renewalFeeAmount : 0,
+          renewal_fee: chargeRenewalFee ? parsedFee : 0, // GINTO: parsedFee na
           renewal_fee_paid: chargeRenewalFee,
           renewal_fee_receipt: chargeRenewalFee ? trimmedOr : null
         }).eq('id', targetContractId);
@@ -253,7 +266,7 @@ export default function Contracts() {
       await recordAuditLog(
         'Extend Contract',
         `Extended contract for ${selectedContract.full_name} to ${newEndDate}.` +
-          (chargeRenewalFee ? ` Collected renewal fee ₱${renewalFeeAmount} (OR #${trimmedOr}).` : ''),
+          (chargeRenewalFee ? ` Collected renewal fee ₱${parsedFee} (OR #${trimmedOr}).` : ''), // GINTO: parsedFee na
         'Contract',
         typeof targetContractId === 'number' ? targetContractId : undefined
       );
@@ -261,12 +274,12 @@ export default function Contracts() {
       setExtendModalOpen(false);
       setSuccessMsg(
         `Contract extended to ${new Date(newEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.` +
-        (chargeRenewalFee ? ` Renewal fee of ₱${renewalFeeAmount} recorded.` : '')
+        (chargeRenewalFee ? ` Renewal fee of ₱${parsedFee} recorded.` : '') // GINTO: parsedFee na
       );
       setNewEndDate('');
       setExtendOrNumber('');
       setChargeRenewalFee(false);
-      setRenewalFeeAmount(100);
+      setRenewalFeeAmount("100");
       fetchContracts();
 
     } catch (err: any) {
@@ -480,7 +493,6 @@ export default function Contracts() {
       if (end && base > end) return false;
       return true;
     }).map(payment => {
-      // Kinukuha ang penalty computation
       const dueDate = new Date(payment.due_date);
       const graceDays = payment.grace_period_days || 3;
       const penaltyStartDate = new Date(dueDate);
@@ -514,7 +526,7 @@ export default function Contracts() {
         amount: contract.renewal_fee,
         receipt_number: contract.renewal_fee_receipt || '—',
         status: contract.renewal_fee_paid ? 'Paid' : 'Pending',
-        penalty: 0, // Walang penalty ang renewal fee
+        penalty: 0,
         isRenewal: true
       });
     }
@@ -757,7 +769,7 @@ export default function Contracts() {
                     <input
                       type="number"
                       value={renewalFeeAmount}
-                      onChange={(e) => setRenewalFeeAmount(Number(e.target.value))}
+                      onChange={(e) => setRenewalFeeAmount(e.target.value)}
                       min="1"
                       style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '100%', fontSize: '14px' }}
                     />
@@ -987,7 +999,7 @@ export default function Contracts() {
                     <tr>
                       <th>Coverage Period</th>
                       <th>Amount</th>
-                      <th>Penalty</th> {/* BAGONG COLUMN DITO */}
+                      <th>Penalty</th>
                       <th>Receipt #</th>
                       <th>Status</th>
                       <th>Actions</th>
