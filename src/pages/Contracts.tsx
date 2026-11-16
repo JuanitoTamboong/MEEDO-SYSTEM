@@ -23,10 +23,7 @@ export default function Contracts() {
 
   const [newEndDate, setNewEndDate] = useState('');
   const [chargeRenewalFee, setChargeRenewalFee] = useState(false);
-  
-  // GINTO: Ginawang string ("100") imbes na number (100) para pwedeng i-backspace nang tuluyan
   const [renewalFeeAmount, setRenewalFeeAmount] = useState("100"); 
-  
   const [extendOrNumber, setExtendOrNumber] = useState('');
 
   const [payMonths, setPayMonths] = useState(1);
@@ -106,21 +103,32 @@ export default function Contracts() {
           let remainingTotal = validPayments
             .filter(p => p.status !== 'Paid')
             .reduce((sum, p) => {
-              let billTotal = Number(p.amount);
-              const dueDate = new Date(p.due_date);
+              const alreadyPaid = Number(p.amount_paid) || 0;
+              const baseAmount = Number(p.amount);
+              const remainingBeforePenalty = Math.max(0, baseAmount - alreadyPaid);
+              
+              const fixedDay = t.registration_date ? new Date(t.registration_date).getDate() : 5;
+              const startObj = new Date(p.month_covered);
+              startObj.setDate(fixedDay);
+              const endObj = new Date(startObj);
+              endObj.setMonth(endObj.getMonth() + 1);
+              
               const graceDays = p.grace_period_days || 3;
-              const penaltyStartDate = new Date(dueDate);
+              const penaltyStartDate = new Date(endObj);
               penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
               
               const today = new Date();
               today.setHours(0, 0, 0, 0);
 
-              if ((today > penaltyStartDate && p.status === 'Pending') || (p.status === 'Overdue' && Number(p.penalty) === 0)) {
-                billTotal += (Number(p.amount) * 0.25);
-              } else if (p.status === 'Overdue') {
-                billTotal += Number(p.penalty);
+              let computedPenalty = Number(p.penalty) || 0;
+
+              if (today > penaltyStartDate && p.status === 'Pending' && computedPenalty === 0) {
+                computedPenalty = remainingBeforePenalty * 0.25;
+              } else if (p.status === 'Overdue' && computedPenalty === 0) {
+                computedPenalty = remainingBeforePenalty * 0.25;
               }
-              return sum + billTotal;
+
+              return sum + baseAmount + computedPenalty - alreadyPaid;
             }, 0);
 
           if (renewalFeePaid) {
@@ -170,8 +178,6 @@ export default function Contracts() {
     setSelectedContract(contract);
     setExtendOrNumber('');
     setChargeRenewalFee(false);
-    
-    // GINTO: String "100" imbes na number
     setRenewalFeeAmount("100");
 
     const baseDate = contract.end_date ? new Date(contract.end_date) : new Date();
@@ -199,8 +205,6 @@ export default function Contracts() {
     }
 
     const trimmedOr = extendOrNumber.trim();
-    
-    // GINTO: I-parse muna ang string bago i-check
     const parsedFee = Number(renewalFeeAmount);
 
     if (chargeRenewalFee) {
@@ -238,7 +242,7 @@ export default function Contracts() {
           start_date: finalStartDate,
           end_date: newEndDate,
           status: 'Active',
-          renewal_fee: chargeRenewalFee ? parsedFee : 0, // GINTO: parsedFee na
+          renewal_fee: chargeRenewalFee ? parsedFee : 0,
           renewal_fee_paid: chargeRenewalFee,
           renewal_fee_receipt: chargeRenewalFee ? trimmedOr : null
         }]).select().single();
@@ -250,7 +254,7 @@ export default function Contracts() {
           start_date: finalStartDate,
           end_date: newEndDate, 
           status: 'Active',
-          renewal_fee: chargeRenewalFee ? parsedFee : 0, // GINTO: parsedFee na
+          renewal_fee: chargeRenewalFee ? parsedFee : 0,
           renewal_fee_paid: chargeRenewalFee,
           renewal_fee_receipt: chargeRenewalFee ? trimmedOr : null
         }).eq('id', targetContractId);
@@ -266,7 +270,7 @@ export default function Contracts() {
       await recordAuditLog(
         'Extend Contract',
         `Extended contract for ${selectedContract.full_name} to ${newEndDate}.` +
-          (chargeRenewalFee ? ` Collected renewal fee ₱${parsedFee} (OR #${trimmedOr}).` : ''), // GINTO: parsedFee na
+          (chargeRenewalFee ? ` Collected renewal fee ₱${parsedFee} (OR #${trimmedOr}).` : ''),
         'Contract',
         typeof targetContractId === 'number' ? targetContractId : undefined
       );
@@ -274,7 +278,7 @@ export default function Contracts() {
       setExtendModalOpen(false);
       setSuccessMsg(
         `Contract extended to ${new Date(newEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.` +
-        (chargeRenewalFee ? ` Renewal fee of ₱${parsedFee} recorded.` : '') // GINTO: parsedFee na
+        (chargeRenewalFee ? ` Renewal fee of ₱${parsedFee} recorded.` : '')
       );
       setNewEndDate('');
       setExtendOrNumber('');
@@ -310,9 +314,18 @@ export default function Contracts() {
       if (contractEnd && baseMonth > contractEnd) return false;
       return true;
     }).map(bill => {
-      const dueDate = new Date(bill.due_date);
+      const alreadyPaid = Number(bill.amount_paid) || 0;
+      const baseAmount = Number(bill.amount);
+      const remainingBeforePenalty = Math.max(0, baseAmount - alreadyPaid);
+      
+      const fixedDay = contract.registration_date ? new Date(contract.registration_date).getDate() : 5;
+      const startObj = new Date(bill.month_covered);
+      startObj.setDate(fixedDay);
+      const endObj = new Date(startObj);
+      endObj.setMonth(endObj.getMonth() + 1);
+      
       const graceDays = bill.grace_period_days || 3;
-      const penaltyStartDate = new Date(dueDate);
+      const penaltyStartDate = new Date(endObj);
       penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
       
       const today = new Date();
@@ -322,16 +335,17 @@ export default function Contracts() {
       let newStatus = bill.status;
 
       if (today > penaltyStartDate && bill.status === 'Pending' && computedPenalty === 0) {
-        computedPenalty = Number(bill.amount) * 0.25;
+        computedPenalty = remainingBeforePenalty * 0.25;
         newStatus = 'Overdue';
       } else if (bill.status === 'Overdue' && computedPenalty === 0) {
-        computedPenalty = Number(bill.amount) * 0.25;
+        computedPenalty = remainingBeforePenalty * 0.25;
       }
 
       return {
         ...bill,
         status: newStatus,
-        penalty: computedPenalty
+        penalty: computedPenalty,
+        remaining: baseAmount + computedPenalty - alreadyPaid
       };
     });
 
@@ -493,9 +507,18 @@ export default function Contracts() {
       if (end && base > end) return false;
       return true;
     }).map(payment => {
-      const dueDate = new Date(payment.due_date);
+      const alreadyPaid = Number(payment.amount_paid) || 0;
+      const baseAmount = Number(payment.amount);
+      const remainingBeforePenalty = Math.max(0, baseAmount - alreadyPaid);
+      
+      const fixedDay = contract.registration_date ? new Date(contract.registration_date).getDate() : 5;
+      const startObj = new Date(payment.month_covered);
+      startObj.setDate(fixedDay);
+      const endObj = new Date(startObj);
+      endObj.setMonth(endObj.getMonth() + 1);
+      
       const graceDays = payment.grace_period_days || 3;
-      const penaltyStartDate = new Date(dueDate);
+      const penaltyStartDate = new Date(endObj);
       penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
       
       const today = new Date();
@@ -505,10 +528,10 @@ export default function Contracts() {
       let currentStatus = payment.status;
 
       if (today > penaltyStartDate && payment.status === 'Pending' && computedPenalty === 0) {
-        computedPenalty = Number(payment.amount) * 0.25;
+        computedPenalty = remainingBeforePenalty * 0.25;
         currentStatus = 'Overdue';
       } else if (payment.status === 'Overdue' && computedPenalty === 0) {
-        computedPenalty = Number(payment.amount) * 0.25;
+        computedPenalty = remainingBeforePenalty * 0.25;
       }
 
       return {

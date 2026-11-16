@@ -21,6 +21,7 @@ interface OverduePayment {
   tenant_name: string | null;
   section_name: string | null;
   amount: number;
+  amount_paid: number;
   due_date: string;
   penalty: number;
   grace_period_days: number;
@@ -105,10 +106,14 @@ export default function StallMonitoring() {
           if (!activeBill) {
             paymentStatus = 'Paid';
           } else {
-            const dueDate = new Date(activeBill.due_date);
-            const graceDays = activeBill.grace_period_days || 3;
+            const fixedDay = activeTenant.registration_date ? new Date(activeTenant.registration_date).getDate() : 5;
+            const startObj = new Date(activeBill.month_covered);
+            startObj.setDate(fixedDay);
+            const endObj = new Date(startObj);
+            endObj.setMonth(endObj.getMonth() + 1);
 
-            const penaltyStartDate = new Date(dueDate);
+            const graceDays = activeBill.grace_period_days || 3;
+            const penaltyStartDate = new Date(endObj);
             penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
             penaltyStartDate.setHours(0, 0, 0, 0);
 
@@ -144,10 +149,16 @@ export default function StallMonitoring() {
       const dynamicOverdue = (paymentsData || []).filter((payment) => {
         if (payment.status === 'Paid') return false;
 
-        const dueDate = new Date(payment.due_date);
-        const graceDays = payment.grace_period_days || 3;
+        const tenant = tenantsData?.find(t => t.stall_id === payment.stall_id);
+        const fixedDay = tenant?.registration_date ? new Date(tenant.registration_date).getDate() : 5;
+        
+        const startObj = new Date(payment.month_covered);
+        startObj.setDate(fixedDay);
+        const endObj = new Date(startObj);
+        endObj.setMonth(endObj.getMonth() + 1);
 
-        const penaltyStartDate = new Date(dueDate);
+        const graceDays = payment.grace_period_days || 3;
+        const penaltyStartDate = new Date(endObj);
         penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
         penaltyStartDate.setHours(0, 0, 0, 0);
 
@@ -161,6 +172,11 @@ export default function StallMonitoring() {
         const section = sectionsData?.find(
           (item) => item.id === stall?.section_id
         );
+        
+        const alreadyPaid = Number(payment.amount_paid) || 0;
+        const baseAmount = Number(payment.amount);
+        const remainingBeforePenalty = Math.max(0, baseAmount - alreadyPaid);
+        const computedPenalty = payment.penalty || (remainingBeforePenalty * 0.25);
 
         return {
           id: payment.id,
@@ -168,8 +184,9 @@ export default function StallMonitoring() {
           tenant_name: payment.tenant_name || null,
           section_name: section?.section_name || null,
           amount: payment.amount,
+          amount_paid: alreadyPaid,
           due_date: payment.due_date,
-          penalty: payment.penalty || 0,
+          penalty: computedPenalty,
           grace_period_days: payment.grace_period_days || 3
         };
       });
@@ -492,28 +509,17 @@ export default function StallMonitoring() {
 
               <tbody>
                 {overdueList.map((overdue) => {
-                  const dueDate = new Date(overdue.due_date);
-                  const graceDays = overdue.grace_period_days; 
-
-                  const penaltyStartDate = new Date(dueDate);
-                  penaltyStartDate.setDate(
-                    penaltyStartDate.getDate() + graceDays
-                  );
-                  penaltyStartDate.setHours(0, 0, 0, 0);
-
                   const todayForCalc = new Date();
                   todayForCalc.setHours(0, 0, 0, 0);
 
-                  const diffTime =
-                    todayForCalc.getTime() - penaltyStartDate.getTime();
+                  const penaltyStartDate = new Date(overdue.due_date);
+                  penaltyStartDate.setDate(penaltyStartDate.getDate() + overdue.grace_period_days);
+                  penaltyStartDate.setHours(0, 0, 0, 0);
 
-                  const daysOverdue = Math.max(
-                    0,
-                    Math.floor(diffTime / (1000 * 60 * 60 * 24))
-                  );
+                  const diffTime = todayForCalc.getTime() - penaltyStartDate.getTime();
+                  const daysOverdue = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
 
-                  const penalty = overdue.amount * 0.25;
-                  const totalDue = overdue.amount + penalty;
+                  const totalDue = Number(overdue.amount) + Number(overdue.penalty);
 
                   return (
                     <tr key={overdue.id}>
@@ -526,7 +532,7 @@ export default function StallMonitoring() {
                       <td>{overdue.section_name || '—'}</td>
                       <td>₱{formatCurrency(overdue.amount)}</td>
                       <td>
-                        {dueDate.toLocaleDateString('en-US', {
+                        {new Date(overdue.due_date).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric'
@@ -534,7 +540,7 @@ export default function StallMonitoring() {
                       </td>
                       <td>{daysOverdue} days</td>
                       <td className="penalty-amount">
-                        + ₱{formatCurrency(penalty)}
+                        + ₱{formatCurrency(overdue.penalty)}
                       </td>
                       <td>
                         <strong className="total-due">

@@ -102,22 +102,31 @@ export default function StallDetails() {
         const paid = historyData.filter((p: any) => p.status === 'Paid');
 
         const processedUnpaid = unpaid.map((bill: any) => {
-          const dueDate = new Date(bill.due_date);
+          const fixedDay = activeTenant?.registration_date ? new Date(activeTenant.registration_date).getDate() : 5;
+          
+          const startObj = new Date(bill.month_covered);
+          startObj.setDate(fixedDay);
+          
+          const endObj = new Date(startObj);
+          endObj.setMonth(endObj.getMonth() + 1);
+          
           const graceDays = bill.grace_period_days || 3;
-
-          const penaltyStartDate = new Date(dueDate);
+          const penaltyStartDate = new Date(endObj);
           penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
 
           let penaltyAmount = Number(bill.penalty) || 0;
           let newStatus = bill.status;
 
+          const alreadyPaid = Number(bill.amount_paid) || 0;
+          const baseAmount = Number(bill.amount);
+          const remainingBeforePenalty = Math.max(0, baseAmount - alreadyPaid);
+
           if (today > penaltyStartDate && bill.status === 'Pending' && penaltyAmount === 0) {
-            penaltyAmount = Number(bill.amount) * 0.25;
+            penaltyAmount = remainingBeforePenalty * 0.25;
             newStatus = 'Overdue';
           }
 
-          const totalDue = Number(bill.amount) + penaltyAmount;
-          const alreadyPaid = Number(bill.amount_paid) || 0;
+          const totalDue = baseAmount + penaltyAmount;
           const remaining = Math.max(0, totalDue - alreadyPaid);
 
           return {

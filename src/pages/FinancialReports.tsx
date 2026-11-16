@@ -12,19 +12,16 @@ const monthsList = [
 export default function FinancialReports() {
   const [activeTab, setActiveTab] = useState('monthly');
 
-  // Filters
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [availableYears, setAvailableYears] = useState<number[]>([new Date().getFullYear()]);
 
-  // Data
   const [monthlyPayments, setMonthlyPayments] = useState<any[]>([]);
   const [overduePayments, setOverduePayments] = useState<any[]>([]);
   const [annualData, setAnnualData] = useState<
     Record<number, { rent: number; penalty: number; total: number; count: number }>
   >({});
 
-  // Metrics
   const [totalCollections, setTotalCollections] = useState(0);
   const [totalPenalties, setTotalPenalties] = useState(0);
   const [paymentCount, setPaymentCount] = useState(0);
@@ -60,13 +57,12 @@ export default function FinancialReports() {
 
       const { data: stallsData } = await supabase.from('stalls').select('id, stall_number, section_id');
       const { data: sectionsData } = await supabase.from('sections').select('id, section_name');
-      const { data: tenantsData } = await supabase.from('tenants').select('stall_id, full_name').eq('status', 'active');
+      const { data: tenantsData } = await supabase.from('tenants').select('stall_id, full_name, registration_date, grace_period_days').eq('status', 'active');
 
       const stallMap = new Map(stallsData?.map(s => [s.id, s]) || []);
       const sectionMap = new Map(sectionsData?.map(s => [s.id, s]) || []);
-      const tenantMap = new Map(tenantsData?.map(t => [t.stall_id, t.full_name]) || []);
+      const tenantMap = new Map(tenantsData?.map(t => [t.stall_id, t]) || []);
 
-      // ---------- MONTHLY ----------
       const { data: paidData } = await supabase
         .from('payments')
         .select('*')
@@ -79,7 +75,8 @@ export default function FinancialReports() {
         const enriched = paidData.map(p => {
           const stall = stallMap.get(p.stall_id);
           const section = stall ? sectionMap.get(stall.section_id) : null;
-          const realTenantName = tenantMap.get(p.stall_id) || p.tenant_name;
+          const tenantInfo = tenantMap.get(p.stall_id);
+          const realTenantName = tenantInfo?.full_name || p.tenant_name;
 
           const baseAmount = Number(p.amount) || 0;
           const penalty = Number(p.penalty) || 0;
@@ -114,7 +111,6 @@ export default function FinancialReports() {
         setAvgPayment(0);
       }
 
-      // Collection rate
       const { count: tenantCount } = await supabase
         .from('stalls')
         .select('*', { count: 'exact', head: true })
@@ -122,7 +118,6 @@ export default function FinancialReports() {
       const tenants = tenantCount || 0;
       setCollectionRate(tenants > 0 ? Math.round(((paidData?.length || 0) / tenants) * 100) : 0);
 
-      // ---------- OVERDUE ----------
       const { data: pendingBills } = await supabase
         .from('payments')
         .select('*')
@@ -133,13 +128,24 @@ export default function FinancialReports() {
         today.setHours(0, 0, 0, 0);
 
         const dynamicOverdue = pendingBills.map(o => {
-          const dueDate = new Date(o.due_date);
-          const graceDays = o.grace_period_days || 3;
-          const penaltyStartDate = new Date(dueDate);
+          const tenantInfo = tenantMap.get(o.stall_id);
+          const fixedDay = tenantInfo?.registration_date ? new Date(tenantInfo.registration_date).getDate() : 5;
+          
+          const startObj = new Date(o.month_covered);
+          startObj.setDate(fixedDay);
+          const endObj = new Date(startObj);
+          endObj.setMonth(endObj.getMonth() + 1);
+
+          const graceDays = o.grace_period_days || tenantInfo?.grace_period_days || 3;
+          const penaltyStartDate = new Date(endObj);
           penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
 
           if (today > penaltyStartDate) {
-            const penaltyAmount = Number(o.amount) * 0.25;
+            const alreadyPaid = Number(o.amount_paid) || 0;
+            const baseAmount = Number(o.amount);
+            const remainingBeforePenalty = Math.max(0, baseAmount - alreadyPaid);
+            
+            const penaltyAmount = o.penalty || (remainingBeforePenalty * 0.25);
             const daysLate = Math.ceil(
               (today.getTime() - penaltyStartDate.getTime()) / (1000 * 3600 * 24)
             );
@@ -148,7 +154,7 @@ export default function FinancialReports() {
               ...o,
               status: 'Overdue',
               penalty: penaltyAmount,
-              total_due: Number(o.amount) + penaltyAmount,
+              total_due: baseAmount + penaltyAmount,
               days_late: daysLate,
               penalty_start_date: penaltyStartDate,
             };
@@ -160,7 +166,8 @@ export default function FinancialReports() {
           if (!o) return null;
           const stall = stallMap.get(o.stall_id);
           const section = stall ? sectionMap.get(stall.section_id) : null;
-          const realTenantName = tenantMap.get(o.stall_id) || o.tenant_name;
+          const tenantInfo = tenantMap.get(o.stall_id);
+          const realTenantName = tenantInfo?.full_name || o.tenant_name;
 
           return {
             ...o,
@@ -176,7 +183,6 @@ export default function FinancialReports() {
         setOverduePayments(enrichedOverdue as any[]);
       }
 
-      // ---------- ANNUAL ----------
       const { data: annualRaw } = await supabase
         .from('payments')
         .select('amount, penalty, month_covered')
@@ -230,8 +236,8 @@ export default function FinancialReports() {
       cells.forEach(cell => {
         let text = cell.textContent?.trim() || '';
         text = text
-          .replace(/\+/g, '')          // remove leading plus (penalty indicator)
-          .replace(/[₱,]/g, '')         // strip currency + commas
+          .replace(/\+/g, '')
+          .replace(/[₱,]/g, '')
           .replace(/\s+/g, ' ')
           .trim();
         rowData.push(`"${text}"`);
@@ -267,7 +273,6 @@ export default function FinancialReports() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="report-tabs">
         <button className={`tab-btn ${activeTab === 'monthly' ? 'active' : ''}`} onClick={() => setActiveTab('monthly')}>
           <i className="fa-solid fa-calendar-day"></i> Monthly Report
@@ -280,7 +285,6 @@ export default function FinancialReports() {
         </button>
       </div>
 
-      {/* MONTHLY TAB */}
       {activeTab === 'monthly' && (
         <div className="report-content active">
           <div className="filter-bar">
@@ -391,7 +395,6 @@ export default function FinancialReports() {
         </div>
       )}
 
-      {/* ANNUAL TAB */}
       {activeTab === 'annual' && (
         <div className="report-content active">
           <div className="filter-bar">
@@ -465,7 +468,6 @@ export default function FinancialReports() {
         </div>
       )}
 
-      {/* OVERDUE TAB */}
       {activeTab === 'overdue' && (
         <div className="report-content active">
           <div className="data-panel">
