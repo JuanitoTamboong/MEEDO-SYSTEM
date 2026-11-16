@@ -22,14 +22,14 @@ export default function Contracts() {
   const [unpaidBillsList, setUnpaidBillsList] = useState<any[]>([]);
 
   const [newEndDate, setNewEndDate] = useState('');
-  const [markAsPaid, setMarkAsPaid] = useState(false);
+  const [chargeRenewalFee, setChargeRenewalFee] = useState(false);
+  const [renewalFeeAmount, setRenewalFeeAmount] = useState(100); 
   const [extendOrNumber, setExtendOrNumber] = useState('');
 
   const [payMonths, setPayMonths] = useState(1);
   const [payOrNumber, setPayOrNumber] = useState('');
 
   const [isActionLoading, setIsActionLoading] = useState(false);
-
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -54,12 +54,32 @@ export default function Contracts() {
           let endDateStr = null;
           let contractStatus = 'No Contract';
           let contractId = `temp-${t.id}`;
+          
+          let renewalFee = 0;
+          let renewalFeePaid = false;
+          let renewalFeeReceipt = null;
+          let renewalFeeDate = null;
 
           if (existingContract) {
-            startDate = existingContract.start_date;
+            startDate = existingContract.start_date || t.registration_date || new Date().toISOString().split('T')[0]; // Fallback kung N/A
             endDateStr = existingContract.end_date;
-            contractStatus = existingContract.status;
             contractId = existingContract.id;
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const endDate = endDateStr ? new Date(endDateStr) : null;
+
+            if (endDate && endDate < today) {
+              contractStatus = 'Expired';
+              renewalFeePaid = false; 
+            } else {
+              contractStatus = existingContract.status;
+              renewalFeePaid = existingContract.renewal_fee_paid || false;
+            }
+
+            renewalFee = Number(existingContract.renewal_fee) || 0;
+            renewalFeeReceipt = existingContract.renewal_fee_receipt || null;
+            renewalFeeDate = existingContract.updated_at || existingContract.created_at || new Date().toISOString();
           }
 
           const stallPayments = paymentsData?.filter(p => p.stall_id === t.stall_id) || [];
@@ -78,13 +98,12 @@ export default function Contracts() {
             validPayments = stallPayments;
           }
 
-          const paidTotal = validPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
+          let paidTotal = validPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
           
-          const remainingTotal = validPayments
+          let remainingTotal = validPayments
             .filter(p => p.status !== 'Paid')
             .reduce((sum, p) => {
               let billTotal = Number(p.amount);
-              
               const dueDate = new Date(p.due_date);
               const graceDays = p.grace_period_days || 3;
               const penaltyStartDate = new Date(dueDate);
@@ -98,9 +117,14 @@ export default function Contracts() {
               } else if (p.status === 'Overdue') {
                 billTotal += Number(p.penalty);
               }
-              
               return sum + billTotal;
             }, 0);
+
+          if (renewalFeePaid) {
+            paidTotal += renewalFee;
+          } else if (renewalFee > 0) {
+            remainingTotal += renewalFee;
+          }
 
           return {
             id: contractId,
@@ -116,7 +140,11 @@ export default function Contracts() {
             paid_total: paidTotal,
             remaining_total: remainingTotal,
             registration_date: t.registration_date,
-            grace_period_days: t.grace_period_days || 3
+            grace_period_days: t.grace_period_days || 3,
+            renewal_fee: renewalFee,
+            renewal_fee_paid: renewalFeePaid,
+            renewal_fee_receipt: renewalFeeReceipt,
+            renewal_fee_date: renewalFeeDate
           };
         });
 
@@ -128,7 +156,6 @@ export default function Contracts() {
 
         setContracts(enriched);
       }
-
     } catch (err) {
       console.error(err);
     } finally {
@@ -136,28 +163,117 @@ export default function Contracts() {
     }
   }
 
-  const handleViewDetails = async (contract: any) => {
+  const openExtendModal = (contract: any) => {
     setSelectedContract(contract);
-    setDetailsModalOpen(true);
+    setExtendOrNumber('');
+    setChargeRenewalFee(false);
+    setRenewalFeeAmount(100);
 
-    const { data } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('stall_id', contract.stall_id)
-      .order('month_covered', { ascending: true });
+    const baseDate = contract.end_date ? new Date(contract.end_date) : new Date();
+    baseDate.setFullYear(baseDate.getFullYear() + 5);
+    setNewEndDate(baseDate.toISOString().split('T')[0]);
 
-    const start = contract.start_date ? contract.start_date.slice(0, 7) : null;
-    const end = contract.end_date ? contract.end_date.slice(0, 7) : null;
+    setExtendModalOpen(true);
+  };
 
-    const filtered = (data || []).filter(p => {
-      if (!p.month_covered) return false;
-      const base = String(p.month_covered).replace('-partial', '').slice(0, 7);
-      if (start && base < start) return false;
-      if (end && base > end) return false;
-      return true;
-    });
+  const handleExtendContract = async () => {
+    if (!selectedContract) return;
 
-    setContractDetails(filtered);
+    if (!newEndDate) {
+      setErrorMsg("Please select a new end date before saving.");
+      return;
+    }
+
+    if (selectedContract.end_date) {
+      const currentEnd = new Date(selectedContract.end_date).setHours(0, 0, 0, 0);
+      const newEnd = new Date(newEndDate).setHours(0, 0, 0, 0);
+      if (newEnd <= currentEnd) {
+        setErrorMsg("The new end date must be later than the current end date to extend the contract.");
+        return;
+      }
+    }
+
+    const trimmedOr = extendOrNumber.trim();
+    if (chargeRenewalFee) {
+      if (!trimmedOr) {
+        setErrorMsg("Please enter the Official Receipt number to pay the renewal fee.");
+        return;
+      }
+      if (!/^\d+$/.test(trimmedOr)) {
+        setErrorMsg("Receipt number must contain numbers only (e.g., 000851).");
+        return;
+      }
+    }
+
+    setIsActionLoading(true);
+
+    try {
+      let targetContractId = selectedContract.id;
+      const isTempContract = selectedContract.id.toString().startsWith('temp-');
+
+      let finalStartDate = selectedContract.start_date;
+      const todayStr = new Date().toISOString().split('T')[0];
+      
+      if (selectedContract.status === 'Expired' || !finalStartDate || finalStartDate >= newEndDate) {
+        finalStartDate = todayStr;
+      }
+
+      if (isTempContract) {
+        const { data: newContract, error: createError } = await supabase.from('contracts').insert([{
+          tenant_id: selectedContract.tenant_id,
+          stall_id: selectedContract.stall_id,
+          start_date: finalStartDate,
+          end_date: newEndDate,
+          status: 'Active',
+          renewal_fee: chargeRenewalFee ? renewalFeeAmount : 0,
+          renewal_fee_paid: chargeRenewalFee,
+          renewal_fee_receipt: chargeRenewalFee ? trimmedOr : null
+        }]).select().single();
+
+        if (createError) throw createError;
+        targetContractId = newContract.id;
+      } else {
+        await supabase.from('contracts').update({ 
+          start_date: finalStartDate,
+          end_date: newEndDate, 
+          status: 'Active',
+          renewal_fee: chargeRenewalFee ? renewalFeeAmount : 0,
+          renewal_fee_paid: chargeRenewalFee,
+          renewal_fee_receipt: chargeRenewalFee ? trimmedOr : null
+        }).eq('id', targetContractId);
+
+        await supabase.from('contract_extensions').insert([{
+          contract_id: targetContractId,
+          previous_end_date: selectedContract.end_date,
+          new_end_date: newEndDate,
+          months: 0
+        }]);
+      }
+
+      await recordAuditLog(
+        'Extend Contract',
+        `Extended contract for ${selectedContract.full_name} to ${newEndDate}.` +
+          (chargeRenewalFee ? ` Collected renewal fee ₱${renewalFeeAmount} (OR #${trimmedOr}).` : ''),
+        'Contract',
+        typeof targetContractId === 'number' ? targetContractId : undefined
+      );
+
+      setExtendModalOpen(false);
+      setSuccessMsg(
+        `Contract extended to ${new Date(newEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.` +
+        (chargeRenewalFee ? ` Renewal fee of ₱${renewalFeeAmount} recorded.` : '')
+      );
+      setNewEndDate('');
+      setExtendOrNumber('');
+      setChargeRenewalFee(false);
+      setRenewalFeeAmount(100);
+      fetchContracts();
+
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
   const openPayBalanceModal = async (contract: any) => {
@@ -211,270 +327,6 @@ export default function Contracts() {
     setPayOrNumber('');
     setPayBalanceModalOpen(true);
     setIsActionLoading(false);
-  };
-
-  const handleExtendContract = async () => {
-    if (!selectedContract) return;
-
-    if (!newEndDate) {
-      setErrorMsg("Please select a new end date before saving.");
-      return;
-    }
-
-    if (selectedContract.end_date) {
-      const currentEnd = new Date(selectedContract.end_date).setHours(0, 0, 0, 0);
-      const newEnd = new Date(newEndDate).setHours(0, 0, 0, 0);
-      if (newEnd <= currentEnd) {
-        setErrorMsg("The new end date must be later than the current end date to extend the contract.");
-        return;
-      }
-    }
-
-    const trimmedOr = extendOrNumber.trim();
-    if (markAsPaid) {
-      if (!trimmedOr) {
-        setErrorMsg("Please enter the Official Receipt number to mark bills as Paid.");
-        return;
-      }
-      if (!/^\d+$/.test(trimmedOr)) {
-        setErrorMsg("Receipt number must contain numbers only (e.g., 000851).");
-        return;
-      }
-
-      const { data: existingOr } = await supabase
-        .from('payments')
-        .select('stall_id')
-        .eq('receipt_number', trimmedOr)
-        .neq('stall_id', selectedContract.stall_id)
-        .limit(1);
-
-      if (existingOr && existingOr.length > 0) {
-        setErrorMsg(`Receipt number ${trimmedOr} is already used by another tenant. Please enter a unique OR.`);
-        return;
-      }
-    }
-
-    setIsActionLoading(true);
-
-    try {
-      let targetContractId = selectedContract.id;
-      const isTempContract = selectedContract.id.toString().startsWith('temp-');
-
-      if (isTempContract) {
-        const { data: newContract, error: createError } = await supabase.from('contracts').insert([{
-          tenant_id: selectedContract.tenant_id,
-          stall_id: selectedContract.stall_id,
-          start_date: selectedContract.start_date || new Date().toISOString().split('T')[0],
-          end_date: newEndDate,
-          status: 'Active'
-        }]).select().single();
-
-        if (createError) throw createError;
-        targetContractId = newContract.id;
-      } else {
-        await supabase.from('contracts').update({ end_date: newEndDate, status: 'Active' }).eq('id', targetContractId);
-        await supabase.from('contract_extensions').insert([{
-          contract_id: targetContractId,
-          previous_end_date: selectedContract.end_date,
-          new_end_date: newEndDate,
-          months: 0
-        }]);
-      }
-
-      const dateString = selectedContract.registration_date || selectedContract.start_date || new Date().toISOString().split('T')[0];
-      const fixedDay = parseInt(dateString.split('-')[2], 10);
-
-      let current = new Date(selectedContract.start_date || new Date());
-      current.setDate(1);
-      current.setHours(0, 0, 0, 0);
-
-      const end = new Date(newEndDate);
-      end.setDate(1);
-      end.setHours(0, 0, 0, 0);
-
-      const newPayments: any[] = [];
-      const generatedMonths = new Set();
-
-      while (current <= end) {
-        const year = current.getFullYear();
-        const month = String(current.getMonth() + 1).padStart(2, '0');
-        const monthCovered = `${year}-${month}-01`;
-        const monthKey = `${year}-${month}`;
-
-        if (!generatedMonths.has(monthKey)) {
-          const daysInMonth = new Date(year, current.getMonth() + 1, 0).getDate();
-          const actualDay = Math.min(fixedDay, daysInMonth);
-          const day = String(actualDay).padStart(2, '0');
-          const dueDateStr = `${year}-${month}-${day}`;
-
-          newPayments.push({
-            stall_id: selectedContract.stall_id,
-            tenant_name: selectedContract.full_name,
-            amount: selectedContract.monthly_rent,
-            due_date: dueDateStr,
-            month_covered: monthCovered,
-            status: 'Pending',
-            grace_period_days: 3
-          });
-
-          generatedMonths.add(monthKey);
-        }
-        current.setMonth(current.getMonth() + 1);
-      }
-
-      if (newPayments.length > 0) {
-        await supabase.from('payments').upsert(newPayments, {
-          onConflict: 'stall_id,month_covered',
-          ignoreDuplicates: true
-        });
-      }
-
-      if (markAsPaid) {
-        const todayStr = new Date().toISOString().split('T')[0];
-        
-        const { data: unpaidBills } = await supabase
-          .from('payments')
-          .select('*')
-          .eq('stall_id', selectedContract.stall_id)
-          .neq('status', 'Paid')
-          .order('month_covered', { ascending: true });
-
-        if (unpaidBills && unpaidBills.length > 0) {
-          const contractEndStr = newEndDate.slice(0, 7);
-          
-          const relevantBills = unpaidBills.filter(b => {
-            if (!b.month_covered) return false;
-            const baseMonth = String(b.month_covered).replace('-partial', '').slice(0, 7);
-            return baseMonth <= contractEndStr;
-          });
-
-          for (const bill of relevantBills) {
-            if (String(bill.month_covered).includes('-partial')) continue;
-            
-            const penaltyAmount = bill.status === 'Overdue' ? bill.penalty : 0;
-            const totalPaid = Number(bill.amount) + Number(penaltyAmount);
-            
-            const { error: updateError } = await supabase.from('payments').update({
-              status: 'Paid',
-              payment_date: todayStr,
-              penalty: penaltyAmount,
-              amount_paid: totalPaid,
-              receipt_number: trimmedOr
-            }).eq('id', bill.id);
-
-            if (updateError) {
-              console.error(`Failed to pay bill ${bill.id}:`, updateError);
-            }
-          }
-        }
-      }
-
-      await recordAuditLog(
-        'Extend Contract',
-        `Extended contract for ${selectedContract.full_name} to ${newEndDate}.` +
-          (markAsPaid ? ` Marked outstanding bills as Paid (OR #${trimmedOr}).` : ''),
-        'Contract',
-        typeof targetContractId === 'number' ? targetContractId : undefined
-      );
-
-      setExtendModalOpen(false);
-      setSuccessMsg(
-        `Contract extended to ${new Date(newEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.` +
-        (markAsPaid ? ` Outstanding balance cleared.` : '')
-      );
-      setNewEndDate('');
-      setMarkAsPaid(false);
-      setExtendOrNumber('');
-      fetchContracts();
-
-    } catch (err: any) {
-      setErrorMsg(err.message);
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handleUndoExtension = async () => {
-    if (!selectedContract) return;
-
-    setIsActionLoading(true);
-
-    try {
-      let previousEndDate: string | null = null;
-      const isTempContract = selectedContract.id.toString().startsWith('temp-');
-
-      if (!isTempContract) {
-        const { data: extensions } = await supabase
-          .from('contract_extensions')
-          .select('*')
-          .eq('contract_id', Number(selectedContract.id))
-          .order('id', { ascending: false })
-          .limit(1);
-
-        if (extensions && extensions.length > 0) {
-          previousEndDate = extensions[0].previous_end_date;
-        }
-      }
-
-      if (previousEndDate) {
-        const prevEndMonth = previousEndDate.slice(0, 7) + '-01';
-        await supabase.from('payments').delete()
-          .eq('stall_id', selectedContract.stall_id)
-          .gt('month_covered', prevEndMonth);
-      } else {
-        const { data: allPayments } = await supabase
-          .from('payments')
-          .select('*')
-          .eq('stall_id', selectedContract.stall_id)
-          .order('month_covered', { ascending: true });
-
-        if (allPayments && allPayments.length > 0) {
-          const initialPaidMonth = allPayments[0].month_covered;
-
-          await supabase.from('payments').delete()
-            .eq('stall_id', selectedContract.stall_id)
-            .neq('month_covered', initialPaidMonth);
-        }
-      }
-
-      if (!isTempContract) {
-        if (previousEndDate) {
-          const { data: extensions } = await supabase
-            .from('contract_extensions')
-            .select('*')
-            .eq('contract_id', Number(selectedContract.id))
-            .order('id', { ascending: false })
-            .limit(1);
-
-          if (extensions && extensions.length > 0) {
-            const lastExt = extensions[0];
-            await supabase.from('contract_extensions').delete().eq('id', lastExt.id);
-            await supabase.from('contracts').update({
-              end_date: lastExt.previous_end_date,
-              status: lastExt.previous_end_date < new Date().toISOString().split('T')[0] ? 'Expired' : 'Active'
-            }).eq('id', Number(selectedContract.id));
-          }
-        } else {
-          await supabase.from('contracts').delete().eq('id', Number(selectedContract.id));
-        }
-      }
-
-      await recordAuditLog(
-        'Undo Extension', 
-        `Undid the contract extension for ${selectedContract.full_name}, preserving initial paid registration.`, 
-        'Contract', 
-        !isTempContract ? Number(selectedContract.id) : undefined
-      );
-
-      setUndoModalOpen(false);
-      setSuccessMsg('Extension undone. Generated bills deleted, initial payment preserved.');
-      fetchContracts();
-
-    } catch (err: any) {
-      setErrorMsg(err.message);
-    } finally {
-      setIsActionLoading(false);
-    }
   };
 
   const handlePayBalance = async () => {
@@ -543,6 +395,107 @@ export default function Contracts() {
     }
   };
 
+  const handleUndoExtension = async () => {
+    if (!selectedContract) return;
+
+    setIsActionLoading(true);
+
+    try {
+      let previousEndDate: string | null = null;
+      const isTempContract = selectedContract.id.toString().startsWith('temp-');
+
+      if (!isTempContract) {
+        const { data: extensions } = await supabase
+          .from('contract_extensions')
+          .select('*')
+          .eq('contract_id', Number(selectedContract.id))
+          .order('id', { ascending: false })
+          .limit(1);
+
+        if (extensions && extensions.length > 0) {
+          previousEndDate = extensions[0].previous_end_date;
+        }
+      }
+
+      if (!isTempContract) {
+        if (previousEndDate) {
+          const { data: extensions } = await supabase
+            .from('contract_extensions')
+            .select('*')
+            .eq('contract_id', Number(selectedContract.id))
+            .order('id', { ascending: false })
+            .limit(1);
+
+          if (extensions && extensions.length > 0) {
+            const lastExt = extensions[0];
+            await supabase.from('contract_extensions').delete().eq('id', lastExt.id);
+            await supabase.from('contracts').update({
+              end_date: lastExt.previous_end_date,
+              status: lastExt.previous_end_date < new Date().toISOString().split('T')[0] ? 'Expired' : 'Active',
+              renewal_fee: 0,
+              renewal_fee_paid: false,
+              renewal_fee_receipt: null
+            }).eq('id', Number(selectedContract.id));
+          }
+        } else {
+          await supabase.from('contracts').delete().eq('id', Number(selectedContract.id));
+        }
+      }
+
+      await recordAuditLog(
+        'Undo Extension', 
+        `Undid the contract extension for ${selectedContract.full_name}.`, 
+        'Contract', 
+        !isTempContract ? Number(selectedContract.id) : undefined
+      );
+
+      setUndoModalOpen(false);
+      setSuccessMsg('Extension undone successfully.');
+      fetchContracts();
+
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleViewDetails = async (contract: any) => {
+    setSelectedContract(contract);
+    setDetailsModalOpen(true);
+
+    const { data } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('stall_id', contract.stall_id)
+      .order('month_covered', { ascending: true });
+
+    const start = contract.start_date ? contract.start_date.slice(0, 7) : null;
+    const end = contract.end_date ? contract.end_date.slice(0, 7) : null;
+
+    const filtered = (data || []).filter(p => {
+      if (!p.month_covered) return false;
+      const base = String(p.month_covered).replace('-partial', '').slice(0, 7);
+      if (start && base < start) return false;
+      if (end && base > end) return false;
+      return true;
+    });
+
+    const renewalRecord = [];
+    if (contract.renewal_fee > 0) {
+      renewalRecord.push({
+        id: 'renewal',
+        month_covered: contract.renewal_fee_date || new Date().toISOString(), 
+        amount: contract.renewal_fee,
+        receipt_number: contract.renewal_fee_receipt || '—',
+        status: contract.renewal_fee_paid ? 'Paid' : 'Pending',
+        isRenewal: true
+      });
+    }
+
+    setContractDetails([...renewalRecord, ...filtered]);
+  };
+
   const filteredContracts = contracts.filter(c => {
     const search = searchQuery.toLowerCase();
     const matchesSearch = c.full_name.toLowerCase().includes(search) ||
@@ -557,6 +510,22 @@ export default function Contracts() {
 
   const totalPaid = contracts.reduce((sum, c) => sum + c.paid_total, 0);
   const totalBalance = contracts.reduce((sum, c) => sum + c.remaining_total, 0);
+
+  const getCoverageString = (monthCovered: string, registrationDate: string | null) => {
+    if (!monthCovered) return 'N/A';
+    const fixedDay = registrationDate ? new Date(registrationDate).getDate() : new Date(monthCovered).getDate();
+    
+    const startObj = new Date(String(monthCovered).replace('-partial', ''));
+    startObj.setDate(fixedDay);
+    
+    const endObj = new Date(startObj);
+    endObj.setMonth(endObj.getMonth() + 1);
+    if (endObj.getDate() !== fixedDay) {
+      endObj.setDate(0); 
+    }
+
+    return `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  };
 
   if (isLoading) {
     return (
@@ -573,7 +542,7 @@ export default function Contracts() {
       <div className="page-header">
         <div>
           <h1>Contracts</h1>
-          <p>Manage tenant rental agreements and extensions.</p>
+          <p>Manage tenant rental agreements and renewals.</p>
         </div>
         <div className="header-tools">
           <span className="badge-count"><i className="fa-regular fa-file-lines"></i> {contracts.length} Contracts</span>
@@ -676,14 +645,20 @@ export default function Contracts() {
                       <span className={`status-badge ${c.status.toLowerCase().replace(/\s+/g, '-')}`}>
                         {c.status}
                       </span>
+                      {c.renewal_fee > 0 && (
+                        <div style={{ fontSize: '11px', marginTop: '4px', color: c.renewal_fee_paid ? '#059669' : '#dc2626' }}>
+                          <i className={`fa-solid ${c.renewal_fee_paid ? 'fa-check-circle' : 'fa-exclamation-circle'}`}></i>
+                          {c.renewal_fee_paid ? ' Renewal Paid' : ' Renewal Unpaid'}
+                        </div>
+                      )}
                     </td>
                     <td>
                       {c.status === 'Terminated' ? (
                         <span className="text-muted">View Only</span>
                       ) : (
                         <div className="action-buttons">
-                          <button className="btn-extend" onClick={() => { setSelectedContract(c); setNewEndDate(''); setMarkAsPaid(false); setExtendOrNumber(''); setExtendModalOpen(true); }}>
-                            <i className="fa-solid fa-calendar-plus"></i> Extend
+                          <button className="btn-extend" onClick={() => openExtendModal(c)}>
+                            <i className="fa-solid fa-calendar-plus"></i> Renew Contract
                           </button>
 
                           {Number(c.remaining_total) > 0 && (
@@ -717,37 +692,53 @@ export default function Contracts() {
       {extendModalOpen && selectedContract && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setExtendModalOpen(false) }}>
           <div className="modal-box" style={{ maxWidth: '500px', width: '100%' }}>
-            <div className="modal-icon info-icon"><i className="fa-solid fa-calendar-plus"></i></div>
-            <h3>Extend Contract</h3>
-            <p>Select the new end date for this contract. Months that are already paid will be skipped.</p>
+            <div className="modal-icon info-icon"><i className="fa-solid fa-file-contract"></i></div>
+            <h3>Renew Contract</h3>
+            <p>Set the new expiration date for this contract and record the renewal fee.</p>
             <div className="modal-details">
               <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
               <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
-              <div><strong>Current End Date:</strong> {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString() : 'No contract yet'}</div>
+              <div><strong>Current Expiration:</strong> {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString() : 'No contract yet'}</div>
             </div>
 
-            <div className="input-group" style={{ marginBottom: '16px' }}>
-              <label>New End Date</label>
+            <div className="input-group" style={{ marginBottom: '16px', marginTop: '16px' }}>
+              <label style={{ fontWeight: 600, color: '#334155' }}>New Expiration Date</label>
               <input
                 type="date"
                 value={newEndDate}
                 onChange={(e) => setNewEndDate(e.target.value)}
-                min={new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0]}
+                style={{ padding: '12px', fontSize: '16px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
               />
+              <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                Auto-set to 5 years from today/current end date.
+              </small>
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <div style={{ marginBottom: '16px', padding: '12px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, color: '#334155' }}>
                 <input
                   type="checkbox"
-                  checked={markAsPaid}
-                  onChange={(e) => setMarkAsPaid(e.target.checked)}
+                  checked={chargeRenewalFee}
+                  onChange={(e) => setChargeRenewalFee(e.target.checked)}
                 />
-                Mark newly generated scheduled payments as Paid
+                Charge 5-Year Contract Renewal Fee (₱100 - ₱300)
               </label>
+              
+              {chargeRenewalFee && (
+                <div style={{ marginTop: '12px' }}>
+                  <label style={{ fontSize: '13px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Renewal Fee Amount (₱)</label>
+                  <input
+                    type="number"
+                    value={renewalFeeAmount}
+                    onChange={(e) => setRenewalFeeAmount(Number(e.target.value))}
+                    min="1"
+                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '100%', fontSize: '14px' }}
+                  />
+                </div>
+              )}
             </div>
 
-            {markAsPaid && (
+            {chargeRenewalFee && (
               <div className="input-group" style={{ marginBottom: '16px' }}>
                 <label>Official Receipt No. <span style={{ color: '#dc2626' }}>*</span></label>
                 <input
@@ -760,7 +751,7 @@ export default function Contracts() {
                   style={{ padding: '12px', fontSize: '16px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                 />
                 <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                  This OR will cover all unpaid months up to the new end date.
+                  Enter the OR for the renewal fee.
                 </small>
               </div>
             )}
@@ -770,29 +761,9 @@ export default function Contracts() {
               <button
                 className="btn-primary"
                 onClick={handleExtendContract}
-                disabled={isActionLoading || (markAsPaid && !extendOrNumber.trim())}
+                disabled={isActionLoading || (chargeRenewalFee && !extendOrNumber.trim())}
               >
-                {isActionLoading ? 'Saving...' : 'Save & Extend'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {undoModalOpen && selectedContract && (
-        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setUndoModalOpen(false) }}>
-          <div className="modal-box" style={{ maxWidth: '440px', width: '100%' }}>
-            <div className="modal-icon danger-icon"><i className="fa-solid fa-rotate-left"></i></div>
-            <h3>Undo last extension?</h3>
-            <p>This will remove the most recent extension and delete the bills generated by it (including paid ones). Your initial paid registration will be kept safe.</p>
-            <div className="modal-details">
-              <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
-              <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setUndoModalOpen(false)} disabled={isActionLoading}>Cancel</button>
-              <button className="btn-danger" onClick={handleUndoExtension} disabled={isActionLoading}>
-                {isActionLoading ? 'Undoing...' : 'Undo Extension'}
+                {isActionLoading ? 'Saving...' : 'Save Renewal'}
               </button>
             </div>
           </div>
@@ -808,7 +779,7 @@ export default function Contracts() {
                 <i className="fa-solid fa-receipt" style={{ fontSize: '18px' }}></i>
               </div>
               <div>
-                <h3 style={{ fontSize: '18px', margin: '0 0 2px 0', color: '#0f172a' }}>Record Payment</h3>
+                <h3 style={{ fontSize: '18px', margin: '0 0 2px 0', color: '#0f172a' }}>Pay Rent Balance</h3>
                 <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Select the months to pay and enter the OR number.</p>
               </div>
             </div>
@@ -952,6 +923,26 @@ export default function Contracts() {
         </div>
       )}
 
+      {undoModalOpen && selectedContract && (
+        <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setUndoModalOpen(false) }}>
+          <div className="modal-box" style={{ maxWidth: '440px', width: '100%' }}>
+            <div className="modal-icon danger-icon"><i className="fa-solid fa-rotate-left"></i></div>
+            <h3>Undo last renewal?</h3>
+            <p>This will revert the contract expiration date to its previous state and remove the renewal fee record.</p>
+            <div className="modal-details">
+              <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
+              <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={() => setUndoModalOpen(false)} disabled={isActionLoading}>Cancel</button>
+              <button className="btn-danger" onClick={handleUndoExtension} disabled={isActionLoading}>
+                {isActionLoading ? 'Undoing...' : 'Undo Renewal'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {detailsModalOpen && selectedContract && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setDetailsModalOpen(false) }}>
           <div className="modal-box">
@@ -963,7 +954,6 @@ export default function Contracts() {
               <table>
                 <thead>
                   <tr>
-                    <th>Month Covered</th>
                     <th>Coverage Period</th>
                     <th>Amount</th>
                     <th>Receipt #</th>
@@ -973,90 +963,60 @@ export default function Contracts() {
                 </thead>
                 <tbody>
                   {contractDetails.length === 0 ? (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No payments recorded for this contract period.</td></tr>
+                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No rent payments recorded for this contract period.</td></tr>
                   ) : (
-                    contractDetails.map(p => {
-                      const monthStr = p.month_covered ? String(p.month_covered).replace('-partial', '') : null;
-                      let coverageDisplay = '—';
-                      if (monthStr && p.due_date) {
-                        const startObj = new Date(monthStr);
-                        const dueObj = new Date(p.due_date);
-                        const fixedDay = dueObj.getDate();
-
-                        startObj.setDate(fixedDay);
-
-                        const endObj = new Date(startObj);
-                        endObj.setMonth(endObj.getMonth() + 1);
-
-                        if (endObj.getDate() !== fixedDay) {
-                          endObj.setDate(0);
-                        }
-
-                        coverageDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-                      }
-
-                      let displayStatus = p.status;
-                      let displayPenalty = Number(p.penalty) || 0;
-
-                      if (p.status !== 'Paid') {
-                        const dueDate = new Date(p.due_date);
-                        const graceDays = p.grace_period_days || 3;
-                        const penaltyStartDate = new Date(dueDate);
-                        penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
-                        
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-
-                        if (today > penaltyStartDate) {
-                          displayStatus = 'Overdue';
-                          if (displayPenalty === 0) {
-                            displayPenalty = Number(p.amount) * 0.25;
-                          }
-                        }
-                      }
-
-                      return (
-                        <tr key={p.id}>
-                          <td>
-                            {p.month_covered
-                              ? new Date(String(p.month_covered).replace('-partial', '')).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-                              : '—'}
-                            {String(p.month_covered).includes('-partial') && (
-                              <span style={{ fontSize: '10px', color: '#f97316', marginLeft: '6px', fontWeight: 600 }}>(Remainder)</span>
-                            )}
-                          </td>
-                          <td style={{ color: '#64748b', fontSize: '12px' }}>{coverageDisplay}</td>
-                          <td>
-                            ₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            {displayPenalty > 0 && (
-                              <span style={{ color: '#dc2626', fontSize: '11px', display: 'block', marginTop: '4px' }}>
-                                + ₱{displayPenalty.toLocaleString(undefined, { minimumFractionDigits: 2 })} penalty
-                              </span>
-                            )}
-                          </td>
-                          <td>{p.receipt_number || '—'}</td>
-                          <td>
-                            <span className={`status-badge ${displayStatus.toLowerCase()}`}>
-                              {displayStatus}
+                    contractDetails.map(p => (
+                      <tr key={p.id} style={{ background: p.isRenewal ? '#f0fdf4' : 'transparent' }}>
+                        <td>
+                          {p.isRenewal ? (
+                            <div>
+                              <strong style={{ color: '#059669' }}><i className="fa-solid fa-file-contract" style={{ marginRight: '6px' }}></i> Contract Renewal Fee</strong>
+                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                {selectedContract.start_date ? new Date(selectedContract.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'} - {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                              </div>
+                            </div>
+                          ) : p.month_covered ? (
+                            <span>
+                              {getCoverageString(p.month_covered, selectedContract.registration_date)}
+                              {String(p.month_covered).includes('-partial') && (
+                                <span style={{ color: '#f97316', marginLeft: '4px', fontWeight: 600 }}>(Remainder)</span>
+                              )}
                             </span>
-                          </td>
-                          <td>
-                            {p.status === 'Paid' && p.receipt_number ? (
-                              <button
-                                className="btn-action"
-                                title="Print Receipt"
-                                onClick={() => navigate(`/receipt?id=${p.id}`)}
-                                style={{ color: '#3b82f6' }}
-                              >
-                                <i className="fa-solid fa-print"></i>
-                              </button>
-                            ) : (
-                              <span style={{ color: '#cbd5e1' }}>—</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td style={{ fontWeight: p.isRenewal ? 600 : 400 }}>
+                          ₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td>{p.receipt_number || '—'}</td>
+                        <td>
+                          <span className={`status-badge ${p.status.toLowerCase()}`}>
+                            {p.status}
+                          </span>
+                        </td>
+                        <td>
+                          {p.status === 'Paid' && p.receipt_number ? (
+                            <button
+                              className="btn-action"
+                              title={p.isRenewal ? "Print Renewal Receipt" : "Print Receipt"}
+                              onClick={() => {
+                                if (p.isRenewal) {
+                                  navigate(`/receipt?contractId=${selectedContract.id}`);
+                                } else {
+                                  navigate(`/receipt?id=${p.id}`);
+                                }
+                              }}
+                              style={{ color: '#3b82f6' }}
+                            >
+                              <i className="fa-solid fa-print"></i>
+                            </button>
+                          ) : (
+                            <span style={{ color: '#cbd5e1' }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
