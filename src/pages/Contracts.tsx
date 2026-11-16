@@ -61,7 +61,7 @@ export default function Contracts() {
           let renewalFeeDate = null;
 
           if (existingContract) {
-            startDate = existingContract.start_date || t.registration_date || new Date().toISOString().split('T')[0]; // Fallback kung N/A
+            startDate = existingContract.start_date || t.registration_date || new Date().toISOString().split('T')[0];
             endDateStr = existingContract.end_date;
             contractId = existingContract.id;
             
@@ -479,6 +479,31 @@ export default function Contracts() {
       if (start && base < start) return false;
       if (end && base > end) return false;
       return true;
+    }).map(payment => {
+      // Kinukuha ang penalty computation
+      const dueDate = new Date(payment.due_date);
+      const graceDays = payment.grace_period_days || 3;
+      const penaltyStartDate = new Date(dueDate);
+      penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let computedPenalty = Number(payment.penalty) || 0;
+      let currentStatus = payment.status;
+
+      if (today > penaltyStartDate && payment.status === 'Pending' && computedPenalty === 0) {
+        computedPenalty = Number(payment.amount) * 0.25;
+        currentStatus = 'Overdue';
+      } else if (payment.status === 'Overdue' && computedPenalty === 0) {
+        computedPenalty = Number(payment.amount) * 0.25;
+      }
+
+      return {
+        ...payment,
+        status: currentStatus,
+        penalty: computedPenalty
+      };
     });
 
     const renewalRecord = [];
@@ -489,6 +514,7 @@ export default function Contracts() {
         amount: contract.renewal_fee,
         receipt_number: contract.renewal_fee_receipt || '—',
         status: contract.renewal_fee_paid ? 'Paid' : 'Pending',
+        penalty: 0, // Walang penalty ang renewal fee
         isRenewal: true
       });
     }
@@ -599,7 +625,7 @@ export default function Contracts() {
         </div>
 
         <div className="table-responsive">
-          <table>
+          <table className="contract-directory-table">
             <thead>
               <tr>
                 <th>Tenant & Business</th>
@@ -692,69 +718,71 @@ export default function Contracts() {
       {extendModalOpen && selectedContract && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setExtendModalOpen(false) }}>
           <div className="modal-box" style={{ maxWidth: '500px', width: '100%' }}>
-            <div className="modal-icon info-icon"><i className="fa-solid fa-file-contract"></i></div>
-            <h3>Renew Contract</h3>
-            <p>Set the new expiration date for this contract and record the renewal fee.</p>
-            <div className="modal-details">
-              <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
-              <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
-              <div><strong>Current Expiration:</strong> {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString() : 'No contract yet'}</div>
-            </div>
+            <div className="modal-content-scroll">
+              <div className="modal-icon info-icon"><i className="fa-solid fa-file-contract"></i></div>
+              <h3>Renew Contract</h3>
+              <p>Set the new expiration date for this contract and record the renewal fee.</p>
+              <div className="modal-details">
+                <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
+                <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
+                <div><strong>Current Expiration:</strong> {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString() : 'No contract yet'}</div>
+              </div>
 
-            <div className="input-group" style={{ marginBottom: '16px', marginTop: '16px' }}>
-              <label style={{ fontWeight: 600, color: '#334155' }}>New Expiration Date</label>
-              <input
-                type="date"
-                value={newEndDate}
-                onChange={(e) => setNewEndDate(e.target.value)}
-                style={{ padding: '12px', fontSize: '16px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-              />
-              <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                Auto-set to 5 years from today/current end date.
-              </small>
-            </div>
-
-            <div style={{ marginBottom: '16px', padding: '12px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, color: '#334155' }}>
+              <div className="input-group" style={{ marginBottom: '16px', marginTop: '16px' }}>
+                <label style={{ fontWeight: 600, color: '#334155' }}>New Expiration Date</label>
                 <input
-                  type="checkbox"
-                  checked={chargeRenewalFee}
-                  onChange={(e) => setChargeRenewalFee(e.target.checked)}
-                />
-                Charge 5-Year Contract Renewal Fee (₱100 - ₱300)
-              </label>
-              
-              {chargeRenewalFee && (
-                <div style={{ marginTop: '12px' }}>
-                  <label style={{ fontSize: '13px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Renewal Fee Amount (₱)</label>
-                  <input
-                    type="number"
-                    value={renewalFeeAmount}
-                    onChange={(e) => setRenewalFeeAmount(Number(e.target.value))}
-                    min="1"
-                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '100%', fontSize: '14px' }}
-                  />
-                </div>
-              )}
-            </div>
-
-            {chargeRenewalFee && (
-              <div className="input-group" style={{ marginBottom: '16px' }}>
-                <label>Official Receipt No. <span style={{ color: '#dc2626' }}>*</span></label>
-                <input
-                  type="text"
-                  value={extendOrNumber}
-                  onChange={(e) => setExtendOrNumber(e.target.value)}
-                  placeholder="e.g., 000851"
-                  autoComplete="off"
-                  maxLength={12}
+                  type="date"
+                  value={newEndDate}
+                  onChange={(e) => setNewEndDate(e.target.value)}
                   style={{ padding: '12px', fontSize: '16px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                 />
                 <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                  Enter the OR for the renewal fee.
+                  Auto-set to 5 years from today/current end date.
                 </small>
               </div>
-            )}
+
+              <div style={{ marginBottom: '16px', padding: '12px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, color: '#334155' }}>
+                  <input
+                    type="checkbox"
+                    checked={chargeRenewalFee}
+                    onChange={(e) => setChargeRenewalFee(e.target.checked)}
+                  />
+                  Charge 5-Year Contract Renewal Fee (₱100 - ₱300)
+                </label>
+                
+                {chargeRenewalFee && (
+                  <div style={{ marginTop: '12px' }}>
+                    <label style={{ fontSize: '13px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Renewal Fee Amount (₱)</label>
+                    <input
+                      type="number"
+                      value={renewalFeeAmount}
+                      onChange={(e) => setRenewalFeeAmount(Number(e.target.value))}
+                      min="1"
+                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '100%', fontSize: '14px' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {chargeRenewalFee && (
+                <div className="input-group" style={{ marginBottom: '16px' }}>
+                  <label>Official Receipt No. <span style={{ color: '#dc2626' }}>*</span></label>
+                  <input
+                    type="text"
+                    value={extendOrNumber}
+                    onChange={(e) => setExtendOrNumber(e.target.value)}
+                    placeholder="e.g., 000851"
+                    autoComplete="off"
+                    maxLength={12}
+                    style={{ padding: '12px', fontSize: '16px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                  />
+                  <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                    Enter the OR for the renewal fee.
+                  </small>
+                </div>
+              )}
+            </div>
 
             <div className="modal-actions">
               <button className="btn-cancel" onClick={() => setExtendModalOpen(false)} disabled={isActionLoading}>Cancel</button>
@@ -772,114 +800,115 @@ export default function Contracts() {
 
       {payBalanceModalOpen && selectedContract && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setPayBalanceModalOpen(false) }}>
-          <div className="modal-box" style={{ maxWidth: '450px', padding: '20px' }}>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <div style={{ background: '#ecfdf5', color: '#059669', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <i className="fa-solid fa-receipt" style={{ fontSize: '18px' }}></i>
-              </div>
-              <div>
-                <h3 style={{ fontSize: '18px', margin: '0 0 2px 0', color: '#0f172a' }}>Pay Rent Balance</h3>
-                <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Select the months to pay and enter the OR number.</p>
-              </div>
-            </div>
-
-            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
-                <span style={{ color: '#64748b' }}>Tenant:</span>
-                <strong style={{ color: '#0f172a' }}>{selectedContract.full_name}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
-                <span style={{ color: '#64748b' }}>Stall:</span>
-                <strong style={{ color: '#0f172a' }}>{selectedContract.stall_number}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
-                <span style={{ color: '#64748b' }}>Base Rent:</span>
-                <strong style={{ color: '#0f172a' }}>₱{Number(selectedContract.monthly_rent).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: '8px', marginTop: '6px', fontSize: '13px' }}>
-                <strong style={{ color: '#dc2626' }}>Total Balance:</strong>
-                <strong style={{ color: '#dc2626' }}>₱{selectedContract.remaining_total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
-              </div>
-            </div>
-
-            <div className="input-group" style={{ marginBottom: '16px' }}>
-              <label style={{ fontWeight: 600, fontSize: '13px', color: '#334155', marginBottom: '6px', display: 'block' }}>Select Months to Pay</label>
-              <select
-                value={payMonths}
-                onChange={(e) => setPayMonths(Number(e.target.value))}
-                style={{
-                  padding: '10px 12px',
-                  fontSize: '14px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  width: '100%',
-                  backgroundColor: '#fff',
-                  cursor: 'pointer',
-                  outline: 'none',
-                  appearance: 'auto'
-                }}
-              >
-                {Array.from({ length: unpaidBillsList.length }, (_, i) => i + 1).map(m => {
-                  let cost = 0;
-                  for (let i = 0; i < m; i++) {
-                    const bill = unpaidBillsList[i];
-                    cost += Number(bill.amount);
-                    if (bill.status === 'Overdue') cost += Number(bill.penalty);
-                  }
-                  return (
-                    <option key={m} value={m}>
-                      {m} Month{m > 1 ? 's' : ''} — Total: ₱{cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
-            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px', color: '#14532d' }}>
-                <span>Rent ({payMonths} month{payMonths > 1 ? 's' : ''}):</span>
-                <span>₱{unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + Number(b.amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-              </div>
-              
-              {unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0) > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px', color: '#dc2626' }}>
-                  <span>Penalties Included:</span>
-                  <span>+ ₱{unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+          <div className="modal-box" style={{ maxWidth: '450px', width: '100%' }}>
+            <div className="modal-content-scroll">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <div style={{ background: '#ecfdf5', color: '#059669', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <i className="fa-solid fa-receipt" style={{ fontSize: '18px' }}></i>
                 </div>
-              )}
+                <div>
+                  <h3 style={{ fontSize: '18px', margin: '0 0 2px 0', color: '#0f172a' }}>Pay Rent Balance</h3>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Select the months to pay and enter the OR number.</p>
+                </div>
+              </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #86efac', paddingTop: '8px', marginTop: '6px' }}>
-                <strong style={{ fontSize: '14px', color: '#166534' }}>Total to Pay:</strong>
-                <strong style={{ fontSize: '16px', color: '#166534' }}>
-                  ₱{unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + Number(b.amount) + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </strong>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
+                  <span style={{ color: '#64748b' }}>Tenant:</span>
+                  <strong style={{ color: '#0f172a' }}>{selectedContract.full_name}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
+                  <span style={{ color: '#64748b' }}>Stall:</span>
+                  <strong style={{ color: '#0f172a' }}>{selectedContract.stall_number}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
+                  <span style={{ color: '#64748b' }}>Base Rent:</span>
+                  <strong style={{ color: '#0f172a' }}>₱{Number(selectedContract.monthly_rent).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: '8px', marginTop: '6px', fontSize: '13px' }}>
+                  <strong style={{ color: '#dc2626' }}>Total Balance:</strong>
+                  <strong style={{ color: '#dc2626' }}>₱{selectedContract.remaining_total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+                </div>
+              </div>
+
+              <div className="input-group" style={{ marginBottom: '16px' }}>
+                <label style={{ fontWeight: 600, fontSize: '13px', color: '#334155', marginBottom: '6px', display: 'block' }}>Select Months to Pay</label>
+                <select
+                  value={payMonths}
+                  onChange={(e) => setPayMonths(Number(e.target.value))}
+                  style={{
+                    padding: '10px 12px',
+                    fontSize: '14px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    width: '100%',
+                    backgroundColor: '#fff',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    appearance: 'auto'
+                  }}
+                >
+                  {Array.from({ length: unpaidBillsList.length }, (_, i) => i + 1).map(m => {
+                    let cost = 0;
+                    for (let i = 0; i < m; i++) {
+                      const bill = unpaidBillsList[i];
+                      cost += Number(bill.amount);
+                      if (bill.status === 'Overdue') cost += Number(bill.penalty);
+                    }
+                    return (
+                      <option key={m} value={m}>
+                        {m} Month{m > 1 ? 's' : ''} — Total: ₱{cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px', color: '#14532d' }}>
+                  <span>Rent ({payMonths} month{payMonths > 1 ? 's' : ''}):</span>
+                  <span>₱{unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + Number(b.amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                
+                {unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0) > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px', color: '#dc2626' }}>
+                    <span>Penalties Included:</span>
+                    <span>+ ₱{unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #86efac', paddingTop: '8px', marginTop: '6px' }}>
+                  <strong style={{ fontSize: '14px', color: '#166534' }}>Total to Pay:</strong>
+                  <strong style={{ fontSize: '16px', color: '#166534' }}>
+                    ₱{unpaidBillsList.slice(0, payMonths).reduce((sum, b) => sum + Number(b.amount) + (b.status === 'Overdue' ? Number(b.penalty) : 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="input-group" style={{ marginBottom: '20px' }}>
+                <label style={{ fontWeight: 600, fontSize: '13px', color: '#334155', marginBottom: '6px', display: 'block' }}>
+                  Official Receipt No. <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={payOrNumber}
+                  onChange={(e) => setPayOrNumber(e.target.value)}
+                  placeholder="e.g., 000851"
+                  autoComplete="off"
+                  maxLength={12}
+                  style={{ 
+                    padding: '10px 12px', 
+                    fontSize: '14px', 
+                    borderRadius: '6px', 
+                    border: '1px solid #cbd5e1',
+                    width: '100%',
+                    outline: 'none'
+                  }}
+                />
               </div>
             </div>
 
-            <div className="input-group" style={{ marginBottom: '20px' }}>
-              <label style={{ fontWeight: 600, fontSize: '13px', color: '#334155', marginBottom: '6px', display: 'block' }}>
-                Official Receipt No. <span style={{ color: '#dc2626' }}>*</span>
-              </label>
-              <input
-                type="text"
-                value={payOrNumber}
-                onChange={(e) => setPayOrNumber(e.target.value)}
-                placeholder="e.g., 000851"
-                autoComplete="off"
-                maxLength={12}
-                style={{ 
-                  padding: '10px 12px', 
-                  fontSize: '14px', 
-                  borderRadius: '6px', 
-                  border: '1px solid #cbd5e1',
-                  width: '100%',
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div className="modal-actions">
               <button 
                 type="button"
                 className="btn-cancel" 
@@ -918,7 +947,6 @@ export default function Contracts() {
                 )}
               </button>
             </div>
-            
           </div>
         </div>
       )}
@@ -926,12 +954,14 @@ export default function Contracts() {
       {undoModalOpen && selectedContract && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setUndoModalOpen(false) }}>
           <div className="modal-box" style={{ maxWidth: '440px', width: '100%' }}>
-            <div className="modal-icon danger-icon"><i className="fa-solid fa-rotate-left"></i></div>
-            <h3>Undo last renewal?</h3>
-            <p>This will revert the contract expiration date to its previous state and remove the renewal fee record.</p>
-            <div className="modal-details">
-              <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
-              <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
+            <div className="modal-content-scroll">
+              <div className="modal-icon danger-icon"><i className="fa-solid fa-rotate-left"></i></div>
+              <h3>Undo last renewal?</h3>
+              <p>This will revert the contract expiration date to its previous state and remove the renewal fee record.</p>
+              <div className="modal-details">
+                <div><strong>Tenant:</strong> {selectedContract.full_name}</div>
+                <div><strong>Stall:</strong> {selectedContract.stall_number}</div>
+              </div>
             </div>
             <div className="modal-actions">
               <button className="btn-cancel" onClick={() => setUndoModalOpen(false)} disabled={isActionLoading}>Cancel</button>
@@ -946,80 +976,86 @@ export default function Contracts() {
       {detailsModalOpen && selectedContract && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setDetailsModalOpen(false) }}>
           <div className="modal-box">
-            <div className="modal-icon info-icon"><i className="fa-solid fa-file-invoice"></i></div>
-            <h3>Payment History: {selectedContract.full_name}</h3>
-            <p>Contract Period: {selectedContract.start_date ? new Date(selectedContract.start_date).toLocaleDateString() : 'N/A'} to {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString() : 'N/A'}</p>
+            <div className="modal-content-scroll">
+              <div className="modal-icon info-icon"><i className="fa-solid fa-file-invoice"></i></div>
+              <h3>Payment History: {selectedContract.full_name}</h3>
+              <p>Contract Period: {selectedContract.start_date ? new Date(selectedContract.start_date).toLocaleDateString() : 'N/A'} to {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString() : 'N/A'}</p>
 
-            <div className="table-responsive">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Coverage Period</th>
-                    <th>Amount</th>
-                    <th>Receipt #</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contractDetails.length === 0 ? (
-                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No rent payments recorded for this contract period.</td></tr>
-                  ) : (
-                    contractDetails.map(p => (
-                      <tr key={p.id} style={{ background: p.isRenewal ? '#f0fdf4' : 'transparent' }}>
-                        <td>
-                          {p.isRenewal ? (
-                            <div>
-                              <strong style={{ color: '#059669' }}><i className="fa-solid fa-file-contract" style={{ marginRight: '6px' }}></i> Contract Renewal Fee</strong>
-                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                                {selectedContract.start_date ? new Date(selectedContract.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'} - {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+              <div className="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Coverage Period</th>
+                      <th>Amount</th>
+                      <th>Penalty</th> {/* BAGONG COLUMN DITO */}
+                      <th>Receipt #</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contractDetails.length === 0 ? (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No rent payments recorded for this contract period.</td></tr>
+                    ) : (
+                      contractDetails.map(p => (
+                        <tr key={p.id} style={{ background: p.isRenewal ? '#f0fdf4' : 'transparent' }}>
+                          <td>
+                            {p.isRenewal ? (
+                              <div>
+                                <strong style={{ color: '#059669' }}><i className="fa-solid fa-file-contract" style={{ marginRight: '6px' }}></i> Contract Renewal Fee</strong>
+                                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                  {selectedContract.start_date ? new Date(selectedContract.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'} - {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                                </div>
                               </div>
-                            </div>
-                          ) : p.month_covered ? (
-                            <span>
-                              {getCoverageString(p.month_covered, selectedContract.registration_date)}
-                              {String(p.month_covered).includes('-partial') && (
-                                <span style={{ color: '#f97316', marginLeft: '4px', fontWeight: 600 }}>(Remainder)</span>
-                              )}
+                            ) : p.month_covered ? (
+                              <span>
+                                {getCoverageString(p.month_covered, selectedContract.registration_date)}
+                                {String(p.month_covered).includes('-partial') && (
+                                  <span style={{ color: '#f97316', marginLeft: '4px', fontWeight: 600 }}>(Remainder)</span>
+                                )}
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td style={{ fontWeight: p.isRenewal ? 600 : 400 }}>
+                            ₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                          <td style={{ color: Number(p.penalty) > 0 ? '#dc2626' : 'inherit', fontWeight: Number(p.penalty) > 0 ? 600 : 400 }}>
+                            {Number(p.penalty) > 0 ? `₱${Number(p.penalty).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
+                          </td>
+                          <td>{p.receipt_number || '—'}</td>
+                          <td>
+                            <span className={`status-badge ${p.status.toLowerCase()}`}>
+                              {p.status}
                             </span>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td style={{ fontWeight: p.isRenewal ? 600 : 400 }}>
-                          ₱{Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                        <td>{p.receipt_number || '—'}</td>
-                        <td>
-                          <span className={`status-badge ${p.status.toLowerCase()}`}>
-                            {p.status}
-                          </span>
-                        </td>
-                        <td>
-                          {p.status === 'Paid' && p.receipt_number ? (
-                            <button
-                              className="btn-action"
-                              title={p.isRenewal ? "Print Renewal Receipt" : "Print Receipt"}
-                              onClick={() => {
-                                if (p.isRenewal) {
-                                  navigate(`/receipt?contractId=${selectedContract.id}`);
-                                } else {
-                                  navigate(`/receipt?id=${p.id}`);
-                                }
-                              }}
-                              style={{ color: '#3b82f6' }}
-                            >
-                              <i className="fa-solid fa-print"></i>
-                            </button>
-                          ) : (
-                            <span style={{ color: '#cbd5e1' }}>—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                          </td>
+                          <td>
+                            {p.status === 'Paid' && p.receipt_number ? (
+                              <button
+                                className="btn-action"
+                                title={p.isRenewal ? "Print Renewal Receipt" : "Print Receipt"}
+                                onClick={() => {
+                                  if (p.isRenewal) {
+                                    navigate(`/receipt?contractId=${selectedContract.id}`);
+                                  } else {
+                                    navigate(`/receipt?id=${p.id}`);
+                                  }
+                                }}
+                                style={{ color: '#3b82f6' }}
+                              >
+                                <i className="fa-solid fa-print"></i>
+                              </button>
+                            ) : (
+                              <span style={{ color: '#cbd5e1' }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div className="modal-actions">
@@ -1032,12 +1068,16 @@ export default function Contracts() {
       {(successMsg || errorMsg) && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) { setSuccessMsg(''); setErrorMsg(''); } }}>
           <div className="modal-box" style={{ textAlign: 'center', maxWidth: '400px', width: '100%' }}>
-            <div className={`modal-icon ${errorMsg ? 'danger-icon' : 'info-icon'}`} style={{ margin: '0 auto 16px', borderRadius: '50%', width: '56px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: errorMsg ? '#fef2f2' : '#ecfdf5', color: errorMsg ? '#dc2626' : '#059669' }}>
-              <i className={`fa-solid ${errorMsg ? 'fa-triangle-exclamation' : 'fa-check'}`} style={{ fontSize: '24px' }}></i>
+            <div className="modal-content-scroll">
+              <div className={`modal-icon ${errorMsg ? 'danger-icon' : 'info-icon'}`} style={{ margin: '0 auto 16px', borderRadius: '50%', width: '56px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: errorMsg ? '#fef2f2' : '#ecfdf5', color: errorMsg ? '#dc2626' : '#059669' }}>
+                <i className={`fa-solid ${errorMsg ? 'fa-triangle-exclamation' : 'fa-check'}`} style={{ fontSize: '24px' }}></i>
+              </div>
+              <h3 style={{ fontSize: '20px', marginBottom: '8px' }}>{errorMsg ? 'Error' : 'Success'}</h3>
+              <p style={{ fontSize: '15px', color: '#64748b', marginBottom: '24px' }}>{errorMsg || successMsg}</p>
             </div>
-            <h3 style={{ fontSize: '20px', marginBottom: '8px' }}>{errorMsg ? 'Error' : 'Success'}</h3>
-            <p style={{ fontSize: '15px', color: '#64748b', marginBottom: '24px' }}>{errorMsg || successMsg}</p>
-            <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => { setSuccessMsg(''); setErrorMsg(''); }}>Okay</button>
+            <div className="modal-actions" style={{ justifyContent: 'center', borderTop: 'none' }}>
+              <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => { setSuccessMsg(''); setErrorMsg(''); }}>Okay</button>
+            </div>
           </div>
         </div>
       )}

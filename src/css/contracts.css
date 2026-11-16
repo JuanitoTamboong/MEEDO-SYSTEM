@@ -1,4 +1,3 @@
-
 .input-with-icon {
     position: relative;
     display: inline-flex;
@@ -10,11 +9,11 @@
     left: 12px;
     color: #829087;
     font-size: 14px;
-    pointer-events: none; /* Allows clicking through the icon to focus the input */
+    pointer-events: none;
 }
 
 .input-with-icon input {
-    padding-left: 36px !important; /* Pushes the text to the right of the icon */
+    padding-left: 36px !important;
     padding-top: 8px;
     padding-bottom: 8px;
     padding-right: 12px;
@@ -29,7 +28,6 @@
     border-color: #217346;
 }
 
-/* 1. Main Container & Table Wrapper */
 .data-panel {
     width: 100%;
     min-width: 0;
@@ -52,7 +50,6 @@
     scrollbar-width: thin;
 }
 
-/* Base table styles (applies to ALL tables) */
 .data-panel .table-responsive > table {
     width: 100% !important;
     table-layout: auto !important;
@@ -61,10 +58,9 @@
     margin: 0;
 }
 
-/* Force ONLY the Contract Directory table to be wider for the action buttons */
 .data-panel .table-responsive > table.contract-directory-table {
-    min-width: 1300px !important; 
-    table-layout: fixed !important;
+    width: 100% !important;
+    table-layout: auto !important;
 }
 
 .data-panel .table-responsive > table th,
@@ -74,7 +70,6 @@
     vertical-align: middle;
 }
 
-/* Directory table headers */
 .data-panel .table-responsive > table thead {
     background: #eaf1ec;
 }
@@ -91,7 +86,6 @@
     text-align: left;
 }
 
-/* Directory table rows */
 .data-panel .table-responsive > table tbody tr {
     background: #ffffff;
     transition: background 0.15s ease;
@@ -111,20 +105,12 @@
     font-size: 12px;
 }
 
-/* ============================================================
-   COLUMN WIDTH ALLOCATIONS (Only for Contract Directory)
-   ============================================================ */
-   
-.contract-directory-table th:nth-child(1), .contract-directory-table td:nth-child(1) { width: 22%; }
-.contract-directory-table th:nth-child(2), .contract-directory-table td:nth-child(2) { width: 10%; }
-.contract-directory-table th:nth-child(3), .contract-directory-table td:nth-child(3) { width: 22%; }
-.contract-directory-table th:nth-child(4), .contract-directory-table td:nth-child(4) { width: 16%; }
-.contract-directory-table th:nth-child(5), .contract-directory-table td:nth-child(5) { width: 10%; text-align: center; }
-.contract-directory-table th:nth-child(6), .contract-directory-table td:nth-child(6) { width: 20%; min-width: 380px; }
-
-/* ============================================================
-   2. TENANT INFORMATION
-   ============================================================ */
+.contract-directory-table th:nth-child(1), .contract-directory-table td:nth-child(1) { width: 20%; }
+.contract-directory-table th:nth-child(2), .contract-directory-table td:nth-child(2) { width: 8%; }
+.contract-directory-table th:nth-child(3), .contract-directory-table td:nth-child(3) { width: 20%; }
+.contract-directory-table th:nth-child(4), .contract-directory-table td:nth-child(4) { width: 15%; }
+.contract-directory-table th:nth-child(5), .contract-directory-table td:nth-child(5) { width: 12%; text-align: center; }
+.contract-directory-table th:nth-child(6), .contract-directory-table td:nth-child(6) { width: 25%; min-width: max-content; }
 
 .tenant-name {
     margin-bottom: 4px;
@@ -139,10 +125,6 @@
     font-weight: 400;
 }
 
-/* ============================================================
-   3. STALL BADGE
-   ============================================================ */
-
 .stall-badge {
     display: inline-block;
     min-width: 40px;
@@ -155,10 +137,6 @@
     font-weight: 700;
     text-align: center;
 }
-
-/* ============================================================
-   4. CONTRACT DATE RANGE
-   ============================================================ */
 
 .date-range {
     display: flex;
@@ -173,10 +151,6 @@
     color: #8b9a90;
     font-size: 10px;
 }
-
-/* ============================================================
-   5. FINANCIAL INFORMATION
-   ============================================================ */
 
 .financials-grid {
     display: flex;
@@ -209,10 +183,6 @@
 .text-green { color: #16834a !important; }
 .text-red { color: #dc2626 !important; }
 .text-muted { color: #8b9690; font-size: 11px; }
-
-/* ============================================================
-   6. CONTRACT ACTION BUTTONS
-   ============================================================ */
 
 .action-buttons {
     display: flex;
@@ -271,10 +241,6 @@
 .action-buttons .btn-icon.danger { border-color: #f2cccc; color: #dc2626; }
 .action-buttons .btn-icon.danger:hover { background: #fff0f0; border-color: #dc2626; }
 
-/* ============================================================
-   7. MODALS & PAYMENT HISTORY (Scoped to .contracts-page)
-   ============================================================ */
-
 .contracts-page .modal-backdrop {
     position: fixed !important;
     top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
@@ -297,12 +263,28 @@
     max-width: 1100px;
     max-height: calc(100vh - 40px) !important;
     margin: auto !important;
-    padding: 28px !important;
+    padding: 0 !important;
     overflow: hidden !important;
     border: 1px solid #d5dfd8;
     border-radius: 10px;
     background: #ffffff;
     box-shadow: 0 15px 50px rgba(0, 0, 0, 0.18);
+}
+
+.contracts-page .modal-content-scroll {
+    padding: 28px 28px 0 28px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.contracts-page .modal-content-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.contracts-page .modal-content-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
 }
 
 .contracts-page .modal-box h3 {
@@ -321,7 +303,6 @@
     line-height: 1.6;
 }
 
-/* Ensure icons inside modals look right */
 .contracts-page .modal-icon {
     width: 40px;
     height: 40px;
@@ -336,20 +317,29 @@
 .contracts-page .info-icon { background: #eff6ff; color: #2563eb; }
 .contracts-page .success-icon { background: #ecfdf5; color: #059669; }
 
-/* ============================================================
-   8. PAYMENT HISTORY TABLE (Inside Modal)
-   ============================================================ */
+.contracts-page .modal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    gap: 9px;
+    padding: 16px 28px 24px 28px;
+    margin-top: 0;
+    border-top: 1px solid #e2e8e3;
+    background: #ffffff;
+    border-radius: 0 0 10px 10px;
+}
 
 .contracts-page .modal-box .table-responsive {
     display: block;
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     min-width: 0;
     width: 100% !important;
     max-width: 100% !important;
     max-height: 440px;
     min-height: 120px;
     margin-top: 10px;
-    overflow-x: auto !important;
+    overflow-x: hidden !important;
     overflow-y: auto !important;
     border: 1px solid #cbd9cf;
     border-radius: 7px;
@@ -360,9 +350,8 @@
 
 .contracts-page .modal-box .table-responsive table {
     width: 100% !important;
-    min-width: 1020px !important;
     margin: 0;
-    table-layout: fixed !important;
+    table-layout: auto !important;
     border-collapse: collapse !important;
     border-spacing: 0;
 }
@@ -393,7 +382,7 @@
     color: #34443a;
     font-size: 12px;
     vertical-align: middle;
-    white-space: nowrap;
+    white-space: normal;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -402,7 +391,6 @@
 .contracts-page .modal-box .table-responsive tbody tr:nth-child(even) { background: #f8faf9; }
 .contracts-page .modal-box .table-responsive tbody tr:hover { background: #edf6ef; }
 
-/* Print Button inside Modal */
 .contracts-page .modal-box .btn-action {
     display: inline-flex;
     align-items: center;
@@ -426,22 +414,9 @@
     transform: translateY(-1px);
 }
 
-.contracts-page .modal-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    flex-shrink: 0;
-    gap: 9px;
-    margin-top: 18px;
-}
-
-/* ============================================================
-   9. RESPONSIVE DESIGN
-   ============================================================ */
-
 @media (max-width: 1400px) {
     .data-panel .table-responsive > table.contract-directory-table {
-        min-width: 1300px !important;
+        min-width: 100% !important;
     }
 }
 
@@ -451,8 +426,9 @@
         width: calc(100vw - 24px) !important;
         max-width: none !important;
         max-height: calc(100vh - 24px) !important;
-        padding: 18px !important;
     }
+    .contracts-page .modal-content-scroll { padding: 18px 18px 0 18px; }
+    .contracts-page .modal-actions { padding: 12px 18px 18px 18px; }
     .contracts-page .modal-box h3 { font-size: 18px; }
     .contracts-page .modal-box .table-responsive { max-height: 55vh; }
     .contracts-page .modal-actions { flex-wrap: wrap; }
@@ -463,8 +439,9 @@
     .contracts-page .modal-box {
         width: calc(100vw - 16px) !important;
         max-height: calc(100vh - 16px) !important;
-        padding: 14px !important;
     }
+    .contracts-page .modal-content-scroll { padding: 14px 14px 0 14px; }
+    .contracts-page .modal-actions { padding: 10px 14px 14px 14px; }
     .contracts-page .modal-box h3 { font-size: 17px; }
     .contracts-page .modal-box .table-responsive { max-height: 50vh; }
 }
