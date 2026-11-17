@@ -31,7 +31,6 @@ export default function Dashboard() {
     async function loadData() {
       setIsLoading(true);
       try {
-        // Fetch all necessary data at once
         const [
           { data: stallsData },
           { data: tenantsData },
@@ -54,12 +53,10 @@ export default function Dashboard() {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
-          // Replicate the exact logic from Stall Monitoring to calculate accurate metrics
           stallsData.forEach((stall) => {
             const activeTenant = tenantsData?.find(t => t.stall_id === stall.id);
             const stallPayments = (paymentsData || []).filter(p => p.stall_id === stall.id);
             
-            // Only calculate payment status for occupied stalls with a tenant
             if (stall.status === 'Occupied' && activeTenant) {
               const currentDueBill = stallPayments.find(p => {
                 if (p.status === 'Paid') return false;
@@ -80,9 +77,14 @@ export default function Dashboard() {
               if (!activeBill) {
                 paidCount++;
               } else {
-                const dueDate = new Date(activeBill.due_date);
+                const fixedDay = activeTenant?.registration_date ? new Date(activeTenant.registration_date).getDate() : 5;
+                const startObj = new Date(activeBill.month_covered);
+                startObj.setDate(fixedDay);
+                const endObj = new Date(startObj);
+                endObj.setMonth(endObj.getMonth() + 1);
+
                 const graceDays = activeBill.grace_period_days || 3;
-                const penaltyStartDate = new Date(dueDate);
+                const penaltyStartDate = new Date(endObj);
                 penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
                 penaltyStartDate.setHours(0, 0, 0, 0);
 
@@ -126,7 +128,6 @@ export default function Dashboard() {
   return (
     <div className="content-wrapper">
       
-      {/* Header */}
       <div className="header">
         <div>
           <h1>{greeting}, {userName} 👋</h1>
@@ -136,7 +137,6 @@ export default function Dashboard() {
 
       <div className="home">
         
-        {/* Hero Banner */}
         <div className="overview-intro">
           <div>
             <span className="eyebrow">Odiongan Public Market</span>
@@ -146,7 +146,6 @@ export default function Dashboard() {
           <img src={logo} alt="MEEDO Logo" />
         </div>
 
-        {/* Metrics Grid */}
         <div className="metrics">
           <Link className="metric-card metric-primary" to="/stall-monitoring">
             <div className="metric-icon" style={{ background: '#eff6ff', color: '#3b82f6' }}><i className="fa-solid fa-shop"></i></div>
@@ -185,10 +184,8 @@ export default function Dashboard() {
           </Link>
         </div>
 
-        {/* Columns */}
         <div className="overview-columns">
           
-          {/* Recent Activity */}
           <section className="overview-panel activity-panel">
             <div className="panel-heading">
               <div>
@@ -216,7 +213,6 @@ export default function Dashboard() {
             )}
           </section>
 
-          {/* Quick Actions */}
           <section className="overview-panel quick-panel">
             <div className="panel-heading">
               <div>
