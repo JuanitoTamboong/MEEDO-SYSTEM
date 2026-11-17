@@ -286,3 +286,43 @@ body:has(.login-page-container) .main-content {
         padding: 20px 16px;
     }
 }
+
+.logs-table .btn-icon {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #94a3b8;
+    font-size: 14px;
+    transition: all 0.15s ease;
+    padding: 0;
+    line-height: 1;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.logs-table .btn-icon i {
+    font-size: 14px;
+    pointer-events: none;
+}
+
+.logs-table .btn-icon.danger:hover {
+    background: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
+}
+
+.logs-table .btn-icon.danger:active {
+    background: #fee2e2;
+    transform: scale(0.95);
+}
+
+.logs-table td:last-child {
+    text-align: center;
+    vertical-align: middle;
+}

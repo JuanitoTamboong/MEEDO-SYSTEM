@@ -10,13 +10,11 @@ export default function ActivityLogs() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
 
-  // Modals
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [clearAllModalOpen, setClearAllModalOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Success/Error Popup
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -36,7 +34,6 @@ export default function ActivityLogs() {
 
       if (error) throw error;
       if (data) setLogs(data);
-
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -79,7 +76,7 @@ export default function ActivityLogs() {
 
   const filteredLogs = logs.filter(log => {
     const search = searchQuery.toLowerCase();
-    const matchesSearch = 
+    const matchesSearch =
       log.action?.toLowerCase().includes(search) ||
       log.description?.toLowerCase().includes(search) ||
       log.username?.toLowerCase().includes(search) ||
@@ -101,7 +98,6 @@ export default function ActivityLogs() {
 
   return (
     <div className="content-wrapper">
-      {/* Header */}
       <div className="page-header">
         <div>
           <h1>Activity Logs</h1>
@@ -116,7 +112,6 @@ export default function ActivityLogs() {
         )}
       </div>
 
-      {/* Table Panel */}
       <div className="data-panel">
         <div className="data-header">
           <h2>System Logs</h2>
@@ -159,13 +154,12 @@ export default function ActivityLogs() {
               </thead>
               <tbody>
                 {filteredLogs.map(log => {
-                  // --- FIXED: Force Asia/Manila timezone ---
                   const logDate = new Date(log.created_at);
-                  const dateStr = logDate.toLocaleDateString('en-US', { 
-                    month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' 
+                  const dateStr = logDate.toLocaleDateString('en-US', {
+                    month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila'
                   });
-                  const timeStr = logDate.toLocaleTimeString('en-US', { 
-                    hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Manila' 
+                  const timeStr = logDate.toLocaleTimeString('en-US', {
+                    hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Manila'
                   });
 
                   return (
@@ -187,7 +181,7 @@ export default function ActivityLogs() {
                           <div className="log-entity">{log.entity_type} #{log.entity_id}</div>
                         )}
                       </td>
-                      <td>
+                      <td style={{ textAlign: 'center' }}>
                         <button
                           className="btn-icon danger"
                           title="Delete this log"
@@ -205,10 +199,8 @@ export default function ActivityLogs() {
         )}
       </div>
 
-      {/* DELETE SINGLE MODAL */}
       {deleteModalOpen && selectedLog && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setDeleteModalOpen(false) }}>
-          {/* FIX: Added inline maxWidth to prevent global stretching */}
           <div className="modal-box" style={{ maxWidth: '450px' }}>
             <div className="modal-icon danger-icon"><i className="fa-solid fa-trash"></i></div>
             <h3>Delete log #{selectedLog.id}?</h3>
@@ -227,10 +219,8 @@ export default function ActivityLogs() {
         </div>
       )}
 
-      {/* CLEAR ALL MODAL */}
       {clearAllModalOpen && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setClearAllModalOpen(false) }}>
-          {/* FIX: Added inline maxWidth to prevent global stretching */}
           <div className="modal-box" style={{ maxWidth: '450px' }}>
             <div className="modal-icon danger-icon"><i className="fa-solid fa-trash"></i></div>
             <h3>Delete ALL activity logs?</h3>
@@ -250,7 +240,6 @@ export default function ActivityLogs() {
         </div>
       )}
 
-      {/* SUCCESS / ERROR POPUP */}
       {(successMsg || errorMsg) && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) { setSuccessMsg(''); setErrorMsg(''); } }}>
           <div className="modal-box" style={{ textAlign: 'center', maxWidth: '400px' }}>
@@ -263,7 +252,6 @@ export default function ActivityLogs() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
