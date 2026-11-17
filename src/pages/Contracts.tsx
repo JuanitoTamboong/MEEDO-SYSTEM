@@ -83,22 +83,10 @@ export default function Contracts() {
           }
 
           const stallPayments = paymentsData?.filter(p => p.stall_id === t.stall_id) || [];
+          
+          const validPayments = stallPayments;
 
-          let validPayments = [];
-          if (startDate && endDateStr) {
-            const startMonth = startDate.slice(0, 7);
-            const endMonth = endDateStr.slice(0, 7);
-
-            validPayments = stallPayments.filter(p => {
-              if (!p.month_covered) return false;
-              const baseMonth = String(p.month_covered).replace('-partial', '').slice(0, 7);
-              return baseMonth >= startMonth && baseMonth <= endMonth;
-            });
-          } else {
-            validPayments = stallPayments;
-          }
-
-          let paidTotal = validPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount), 0);
+          let paidTotal = validPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + Number(p.amount_paid ?? p.amount), 0);
           
           let remainingTotal = validPayments
             .filter(p => p.status !== 'Paid')
@@ -304,16 +292,7 @@ export default function Contracts() {
       .neq('status', 'Paid')
       .order('month_covered', { ascending: true });
 
-    const contractStart = contract.start_date ? contract.start_date.slice(0, 7) : null;
-    const contractEnd = contract.end_date ? contract.end_date.slice(0, 7) : null;
-
-    const relevantBills = (unpaid || []).filter(b => {
-      if (!b.month_covered) return false;
-      const baseMonth = String(b.month_covered).replace('-partial', '').slice(0, 7);
-      if (contractStart && baseMonth < contractStart) return false;
-      if (contractEnd && baseMonth > contractEnd) return false;
-      return true;
-    }).map(bill => {
+    const relevantBills = (unpaid || []).map(bill => {
       const alreadyPaid = Number(bill.amount_paid) || 0;
       const baseAmount = Number(bill.amount);
       const remainingBeforePenalty = Math.max(0, baseAmount - alreadyPaid);
@@ -497,16 +476,7 @@ export default function Contracts() {
       .eq('stall_id', contract.stall_id)
       .order('month_covered', { ascending: true });
 
-    const start = contract.start_date ? contract.start_date.slice(0, 7) : null;
-    const end = contract.end_date ? contract.end_date.slice(0, 7) : null;
-
-    const filtered = (data || []).filter(p => {
-      if (!p.month_covered) return false;
-      const base = String(p.month_covered).replace('-partial', '').slice(0, 7);
-      if (start && base < start) return false;
-      if (end && base > end) return false;
-      return true;
-    }).map(payment => {
+    const filtered = (data || []).map(payment => {
       const alreadyPaid = Number(payment.amount_paid) || 0;
       const baseAmount = Number(payment.amount);
       const remainingBeforePenalty = Math.max(0, baseAmount - alreadyPaid);
