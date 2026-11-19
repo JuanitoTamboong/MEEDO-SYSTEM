@@ -9,6 +9,30 @@ const monthsList = [
   { num: 10, name: 'October' }, { num: 11, name: 'November' }, { num: 12, name: 'December' }
 ];
 
+const formatCurrency = (amount: number) => {
+  return `₱${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+};
+
+const formatDisplayDate = (dateString: string | null | undefined) => {
+  if (!dateString) return '—';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    year: 'numeric',
+    timeZone: 'UTC' 
+  });
+};
+
+const formatExportDate = (dateString: string | null | undefined) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 export default function FinancialReports() {
   const [activeTab, setActiveTab] = useState('monthly');
 
@@ -22,13 +46,15 @@ export default function FinancialReports() {
     Record<number, { rent: number; penalty: number; total: number; count: number }>
   >({});
 
-  const [totalCollections, setTotalCollections] = useState(0);
-  const [totalPenalties, setTotalPenalties] = useState(0);
-  const [paymentCount, setPaymentCount] = useState(0);
-  const [avgPayment, setAvgPayment] = useState(0);
-  const [collectionRate, setCollectionRate] = useState(0);
-  const [annualTotal, setAnnualTotal] = useState(0);
-  const [annualPenaltyTotal, setAnnualPenaltyTotal] = useState(0);
+  const [metrics, setMetrics] = useState({
+    totalCollections: 0,
+    totalPenalties: 0,
+    paymentCount: 0,
+    avgPayment: 0,
+    collectionRate: 0,
+    annualTotal: 0,
+    annualPenaltyTotal: 0,
+  });
 
   const [isLoading, setIsLoading] = useState(true);
 
@@ -57,7 +83,10 @@ export default function FinancialReports() {
 
       const { data: stallsData } = await supabase.from('stalls').select('id, stall_number, section_id');
       const { data: sectionsData } = await supabase.from('sections').select('id, section_name');
-      const { data: tenantsData } = await supabase.from('tenants').select('stall_id, full_name, registration_date, grace_period_days').eq('status', 'active');
+      const { data: tenantsData } = await supabase
+        .from('tenants')
+        .select('stall_id, full_name, registration_date')
+        .eq('status', 'active');
 
       const stallMap = new Map(stallsData?.map(s => [s.id, s]) || []);
       const sectionMap = new Map(sectionsData?.map(s => [s.id, s]) || []);
@@ -67,62 +96,58 @@ export default function FinancialReports() {
         .from('payments')
         .select('*')
         .eq('status', 'Paid')
-        .gte('month_covered', startDate)
-        .lte('month_covered', endDate)
+        .gte('payment_date', startDate)
+        .lte('payment_date', endDate)
         .order('payment_date', { ascending: false });
+
+      let totalCollections = 0;
+      let totalPenalties = 0;
+      let paymentCount = 0;
+      let avgPayment = 0;
 
       if (paidData) {
         const enriched = paidData.map(p => {
           const stall = stallMap.get(p.stall_id);
           const section = stall ? sectionMap.get(stall.section_id) : null;
           const tenantInfo = tenantMap.get(p.stall_id);
-          const realTenantName = tenantInfo?.full_name || p.tenant_name;
-
           const baseAmount = Number(p.amount) || 0;
           const penalty = Number(p.penalty) || 0;
           const totalPaid = baseAmount + penalty;
+
+          totalCollections += totalPaid;
+          totalPenalties += penalty;
 
           return {
             ...p,
             stall_number: stall?.stall_number,
             section_name: section?.section_name,
-            display_tenant_name: realTenantName,
+            display_tenant_name: tenantInfo?.full_name || p.tenant_name,
             base_amount: baseAmount,
             penalty,
             total_paid: totalPaid,
           };
         });
 
+        paymentCount = enriched.length;
+        avgPayment = paymentCount > 0 ? totalCollections / paymentCount : 0;
         setMonthlyPayments(enriched);
-        setPaymentCount(enriched.length);
-
-        const totalRent = enriched.reduce((sum, p) => sum + p.base_amount, 0);
-        const totalPen = enriched.reduce((sum, p) => sum + p.penalty, 0);
-        const grandTotal = totalRent + totalPen;
-
-        setTotalCollections(grandTotal);
-        setTotalPenalties(totalPen);
-        setAvgPayment(enriched.length > 0 ? grandTotal / enriched.length : 0);
       } else {
         setMonthlyPayments([]);
-        setPaymentCount(0);
-        setTotalCollections(0);
-        setTotalPenalties(0);
-        setAvgPayment(0);
       }
 
       const { count: tenantCount } = await supabase
         .from('stalls')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'Occupied');
-      const tenants = tenantCount || 0;
-      setCollectionRate(tenants > 0 ? Math.round(((paidData?.length || 0) / tenants) * 100) : 0);
+      const totalOccupied = tenantCount || 0;
+      const collectionRate = totalOccupied > 0 ? Math.round(((paidData?.length || 0) / totalOccupied) * 100) : 0;
 
       const { data: pendingBills } = await supabase
         .from('payments')
         .select('*')
         .in('status', ['Pending', 'Overdue']);
 
+      let overdueList: any[] = [];
       if (pendingBills) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -136,7 +161,7 @@ export default function FinancialReports() {
           const endObj = new Date(startObj);
           endObj.setMonth(endObj.getMonth() + 1);
 
-          const graceDays = o.grace_period_days || tenantInfo?.grace_period_days || 3;
+          const graceDays = o.grace_period_days || 3;
           const penaltyStartDate = new Date(endObj);
           penaltyStartDate.setDate(penaltyStartDate.getDate() + graceDays);
 
@@ -146,9 +171,7 @@ export default function FinancialReports() {
             const remainingBeforePenalty = Math.max(0, baseAmount - alreadyPaid);
             
             const penaltyAmount = o.penalty || (remainingBeforePenalty * 0.25);
-            const daysLate = Math.ceil(
-              (today.getTime() - penaltyStartDate.getTime()) / (1000 * 3600 * 24)
-            );
+            const daysLate = Math.ceil((today.getTime() - penaltyStartDate.getTime()) / (1000 * 3600 * 24));
 
             return {
               ...o,
@@ -162,39 +185,36 @@ export default function FinancialReports() {
           return null;
         }).filter(Boolean);
 
-        const enrichedOverdue = dynamicOverdue.map(o => {
+        overdueList = dynamicOverdue.map(o => {
           if (!o) return null;
           const stall = stallMap.get(o.stall_id);
           const section = stall ? sectionMap.get(stall.section_id) : null;
           const tenantInfo = tenantMap.get(o.stall_id);
-          const realTenantName = tenantInfo?.full_name || o.tenant_name;
 
           return {
             ...o,
             stall_number: stall?.stall_number,
             section_name: section?.section_name,
-            display_tenant_name: realTenantName,
+            display_tenant_name: tenantInfo?.full_name || o.tenant_name,
           };
         }).filter(Boolean);
 
-        enrichedOverdue.sort(
-          (a, b) => new Date(a!.due_date).getTime() - new Date(b!.due_date).getTime()
-        );
-        setOverduePayments(enrichedOverdue as any[]);
+        overdueList.sort((a, b) => new Date(a!.due_date).getTime() - new Date(b!.due_date).getTime());
       }
+      setOverduePayments(overdueList);
 
       const { data: annualRaw } = await supabase
         .from('payments')
         .select('amount, penalty, month_covered')
         .eq('status', 'Paid')
-        .gte('month_covered', `${selectedYear}-01-01`)
-        .lte('month_covered', `${selectedYear}-12-31`);
+        .gte('payment_date', `${selectedYear}-01-01`)
+        .lte('payment_date', `${selectedYear}-12-31`);
+
+      let annualTotal = 0;
+      let annualPenaltyTotal = 0;
+      const grouped: Record<number, { rent: number; penalty: number; total: number; count: number }> = {};
 
       if (annualRaw) {
-        const grouped: Record<number, { rent: number; penalty: number; total: number; count: number }> = {};
-        let runningTotal = 0;
-        let runningPenalty = 0;
-
         annualRaw.forEach(p => {
           if (!p.month_covered) return;
           const month = new Date(p.month_covered).getMonth() + 1;
@@ -208,14 +228,23 @@ export default function FinancialReports() {
           grouped[month].total += total;
           grouped[month].count += 1;
 
-          runningTotal += total;
-          runningPenalty += penalty;
+          annualTotal += total;
+          annualPenaltyTotal += penalty;
         });
-
-        setAnnualData(grouped);
-        setAnnualTotal(runningTotal);
-        setAnnualPenaltyTotal(runningPenalty);
       }
+
+      setAnnualData(grouped);
+      
+      setMetrics({
+        totalCollections,
+        totalPenalties,
+        paymentCount,
+        avgPayment,
+        collectionRate,
+        annualTotal,
+        annualPenaltyTotal
+      });
+
     } catch (err) {
       console.error('Error loading financial data:', err);
     } finally {
@@ -223,35 +252,77 @@ export default function FinancialReports() {
     }
   }
 
-  const exportTable = (tableId: string, filename: string) => {
-    const table = document.getElementById(tableId);
-    if (!table) return;
+  const exportTable = (filename: string, data: any[], columns: string[]) => {
+    const csv: string[] = ['\uFEFF'];
+    csv.push(columns.join(','));
 
-    const rows = table.querySelectorAll('tr');
-    const csv: string[] = [];
-
-    rows.forEach(row => {
-      const cells = row.querySelectorAll('td, th');
-      const rowData: string[] = [];
-      cells.forEach(cell => {
-        let text = cell.textContent?.trim() || '';
-        text = text
-          .replace(/\+/g, '')
-          .replace(/[₱,]/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-        rowData.push(`"${text}"`);
+    data.forEach(row => {
+      const rowData = columns.map(col => {
+        let val = row[col] !== null && row[col] !== undefined ? String(row[col]) : '';
+        return `"${val.replace(/"/g, '""')}"`;
       });
       csv.push(rowData.join(','));
     });
 
-    const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+    const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
+    
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
+  };
+
+  const handleExportMonthly = () => {
+    const exportData = monthlyPayments.map(p => ({
+      Date: formatExportDate(p.payment_date),
+      'Stall #': p.stall_number || '',
+      Tenant: p.display_tenant_name || '',
+      Section: p.section_name || '',
+      Rent: p.base_amount.toFixed(2),
+      Penalty: p.penalty > 0 ? p.penalty.toFixed(2) : '-',
+      Total: p.total_paid.toFixed(2),
+      Reference: p.receipt_number || `PAY-${p.id}`
+    }));
+    const cols = ['Date', 'Stall #', 'Tenant', 'Section', 'Rent', 'Penalty', 'Total', 'Reference'];
+    exportTable('monthly-report', exportData, cols);
+  };
+
+  const handleExportAnnual = () => {
+    const exportData = monthsList.map(m => {
+      const data = annualData[m.num];
+      const total = data?.total || 0;
+      const count = data?.count || 0;
+      const penalty = data?.penalty || 0;
+      return {
+        Month: m.name,
+        Payments: count,
+        Rent: (data?.rent || 0).toFixed(2),
+        Penalty: penalty > 0 ? penalty.toFixed(2) : '-',
+        Total: total.toFixed(2),
+        'Average per Payment': (count > 0 ? total / count : 0).toFixed(2)
+      };
+    });
+    const cols = ['Month', 'Payments', 'Rent', 'Penalty', 'Total', 'Average per Payment'];
+    exportTable('annual-report', exportData, cols);
+  };
+
+  const handleExportOverdue = () => {
+    const exportData = overduePayments.map(o => ({
+      'Stall #': o.stall_number || '',
+      Tenant: o.display_tenant_name || '',
+      Section: o.section_name || '',
+      'Amount Due': Number(o.amount).toFixed(2),
+      'Due Date': formatExportDate(o.due_date),
+      'Days Overdue': o.days_late,
+      Penalty: Number(o.penalty).toFixed(2),
+      'Total Due': Number(o.total_due).toFixed(2)
+    }));
+    const cols = ['Stall #', 'Tenant', 'Section', 'Amount Due', 'Due Date', 'Days Overdue', 'Penalty', 'Total Due'];
+    exportTable('overdue-report', exportData, cols);
   };
 
   if (isLoading) {
@@ -307,10 +378,10 @@ export default function FinancialReports() {
               <div className="metric-icon blue"><i className="fa-solid fa-coins"></i></div>
               <div className="metric-data">
                 <div className="metric-label">Total Collections</div>
-                <div className="metric-value">₱{totalCollections.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div className="metric-value">{formatCurrency(metrics.totalCollections)}</div>
                 <div className="metric-sub">
                   {monthsList[selectedMonth - 1].name} {selectedYear}
-                  {totalPenalties > 0 && ` (incl. ₱${totalPenalties.toLocaleString(undefined, { minimumFractionDigits: 2 })} penalty)`}
+                  {metrics.totalPenalties > 0 && ` (incl. ${formatCurrency(metrics.totalPenalties)} penalty)`}
                 </div>
               </div>
             </div>
@@ -318,7 +389,7 @@ export default function FinancialReports() {
               <div className="metric-icon purple"><i className="fa-solid fa-receipt"></i></div>
               <div className="metric-data">
                 <div className="metric-label">Payments Processed</div>
-                <div className="metric-value">{paymentCount}</div>
+                <div className="metric-value">{metrics.paymentCount}</div>
                 <div className="metric-sub">Transactions this month</div>
               </div>
             </div>
@@ -326,7 +397,7 @@ export default function FinancialReports() {
               <div className="metric-icon green"><i className="fa-solid fa-calculator"></i></div>
               <div className="metric-data">
                 <div className="metric-label">Average Payment</div>
-                <div className="metric-value">₱{avgPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div className="metric-value">{formatCurrency(metrics.avgPayment)}</div>
                 <div className="metric-sub">Per transaction (incl. penalty)</div>
               </div>
             </div>
@@ -334,7 +405,7 @@ export default function FinancialReports() {
               <div className="metric-icon orange"><i className="fa-solid fa-percent"></i></div>
               <div className="metric-data">
                 <div className="metric-label">Collection Rate</div>
-                <div className="metric-value">{collectionRate}%</div>
+                <div className="metric-value">{metrics.collectionRate}%</div>
                 <div className="metric-sub">Of total tenants</div>
               </div>
             </div>
@@ -343,7 +414,7 @@ export default function FinancialReports() {
           <div className="data-panel">
             <div className="data-header">
               <h2>Collection Details</h2>
-              <button className="btn-secondary" onClick={() => exportTable('monthlyTable', 'monthly-report')}>
+              <button className="btn-secondary" onClick={handleExportMonthly}>
                 <i className="fa-solid fa-download"></i> Export
               </button>
             </div>
@@ -371,18 +442,16 @@ export default function FinancialReports() {
                   ) : (
                     monthlyPayments.map(p => (
                       <tr key={p.id}>
-                        <td>{new Date(p.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                        <td>{formatDisplayDate(p.payment_date)}</td>
                         <td><strong>{p.stall_number || '—'}</strong></td>
                         <td>{p.display_tenant_name || '—'}</td>
                         <td>{p.section_name || '—'}</td>
-                        <td>₱{p.base_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td>{formatCurrency(p.base_amount)}</td>
                         <td style={{ color: p.penalty > 0 ? '#dc2626' : 'inherit' }}>
-                          {p.penalty > 0
-                            ? `+ ₱${p.penalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                            : '—'}
+                          {p.penalty > 0 ? `+ ${formatCurrency(p.penalty)}` : '—'}
                         </td>
                         <td style={{ fontWeight: 600, color: '#0f172a' }}>
-                          ₱{p.total_paid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          {formatCurrency(p.total_paid)}
                         </td>
                         <td><span className="badge-ref">{p.receipt_number || `PAY-${p.id}`}</span></td>
                       </tr>
@@ -411,10 +480,10 @@ export default function FinancialReports() {
               <div className="metric-icon blue"><i className="fa-solid fa-chart-line"></i></div>
               <div className="metric-data">
                 <div className="metric-label">Annual Total Collections</div>
-                <div className="metric-value">₱{annualTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div className="metric-value">{formatCurrency(metrics.annualTotal)}</div>
                 <div className="metric-sub">
                   For the year {selectedYear}
-                  {annualPenaltyTotal > 0 && ` (incl. ₱${annualPenaltyTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} penalty)`}
+                  {metrics.annualPenaltyTotal > 0 && ` (incl. ${formatCurrency(metrics.annualPenaltyTotal)} penalty)`}
                 </div>
               </div>
             </div>
@@ -423,7 +492,7 @@ export default function FinancialReports() {
           <div className="data-panel">
             <div className="data-header">
               <h2>Monthly Breakdown</h2>
-              <button className="btn-secondary" onClick={() => exportTable('annualTable', 'annual-report')}>
+              <button className="btn-secondary" onClick={handleExportAnnual}>
                 <i className="fa-solid fa-download"></i> Export
               </button>
             </div>
@@ -450,14 +519,12 @@ export default function FinancialReports() {
                       <tr key={m.num}>
                         <td><strong>{m.name}</strong></td>
                         <td>{count}</td>
-                        <td>₱{(data?.rent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td>{formatCurrency(data?.rent || 0)}</td>
                         <td style={{ color: penalty > 0 ? '#dc2626' : 'inherit' }}>
-                          {penalty > 0
-                            ? `+ ₱${penalty.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                            : '—'}
+                          {penalty > 0 ? `+ ${formatCurrency(penalty)}` : '—'}
                         </td>
-                        <td><strong>₱{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
-                        <td>₱{(count > 0 ? total / count : 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td><strong>{formatCurrency(total)}</strong></td>
+                        <td>{formatCurrency(count > 0 ? total / count : 0)}</td>
                       </tr>
                     );
                   })}
@@ -475,7 +542,7 @@ export default function FinancialReports() {
               <h2 style={{ color: '#dc2626' }}>
                 <i className="fa-solid fa-exclamation-triangle"></i> Overdue Accounts (25% Penalty)
               </h2>
-              <button className="btn-secondary" onClick={() => exportTable('overdueTable', 'overdue-report')}>
+              <button className="btn-secondary" onClick={handleExportOverdue}>
                 <i className="fa-solid fa-download"></i> Export
               </button>
             </div>
@@ -506,15 +573,15 @@ export default function FinancialReports() {
                         <td><strong style={{ color: '#dc2626' }}>{o.stall_number || '—'}</strong></td>
                         <td>{o.display_tenant_name || '—'}</td>
                         <td>{o.section_name || '—'}</td>
-                        <td>₱{Number(o.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td>{new Date(o.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                        <td>{formatCurrency(Number(o.amount))}</td>
+                        <td>{formatDisplayDate(o.due_date)}</td>
                         <td>{o.days_late} days</td>
                         <td style={{ color: '#dc2626' }}>
-                          + ₱{Number(o.penalty).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          + {formatCurrency(Number(o.penalty))}
                         </td>
                         <td>
                           <strong style={{ color: '#dc2626' }}>
-                            ₱{Number(o.total_due).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {formatCurrency(Number(o.total_due))}
                           </strong>
                         </td>
                       </tr>
