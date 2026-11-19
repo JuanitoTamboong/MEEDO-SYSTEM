@@ -12,7 +12,6 @@ export default function Login() {
   const [username, setUsername] = useState(''); 
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
@@ -24,29 +23,44 @@ export default function Login() {
     setErrorMsg('');
 
     try {
-      const email = username.includes('@') ? username : `${username}@meedo.local`;
+      let emailToAuth = username.trim();
+
+      if (!emailToAuth.includes('@')) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('username', emailToAuth.toLowerCase())
+          .single();
+
+        if (profileError || !profile) {
+          setErrorMsg('Invalid login credentials');
+          return;
+        }
+        
+        emailToAuth = profile.email;
+      }
 
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
+        email: emailToAuth,
         password: password,
       });
 
       if (error) {
         setErrorMsg(error.message);
-      } else if (data.user) {
-        
-        const actualRole = data.user.user_metadata?.role;
-        
-        if (actualRole && role !== actualRole) {
-           await supabase.auth.signOut();
-           setErrorMsg(`Access Denied: You are not registered as a ${role}.`);
-           return;
-        }
-
-        await recordAuditLog('Login', `User signed in successfully as ${actualRole}`);
-
-        navigate('/dashboard'); 
+        return;
       }
+
+      const actualRole = data.user?.user_metadata?.role;
+      
+      if (actualRole && role !== actualRole) {
+        await supabase.auth.signOut();
+        setErrorMsg(`Access Denied: You are not registered as a ${role}.`);
+        return;
+      }
+
+      await recordAuditLog('Login', `User signed in successfully as ${actualRole}`);
+      navigate('/dashboard'); 
+
     } catch (err) {
       setErrorMsg('An unexpected error occurred. Please try again.');
     } finally {
@@ -56,7 +70,6 @@ export default function Login() {
 
   return (
     <div className="login-page-container">
-      
       <div className="overlay"></div>
 
       <div className="login-wrapper">
