@@ -228,14 +228,16 @@ export default function StallMonitoring() {
       'Payment Status'
     ];
 
-    const csvRows = [headers.join(',')];
+    // ✅ FIX: Add BOM (\uFEFF) to fix special characters like em-dash (—)
+    const csvRows = ['\uFEFF' + headers.join(',')];
 
     filteredStalls.forEach((stall) => {
       const row = [
         stall.stall_number,
-        stall.tenant_name || '—',
-        stall.section_name || '—',
-        stall.contact_number || '—',
+        stall.tenant_name || '',
+        stall.section_name || '',
+        // ✅ FIX: Add a tab (\t) before the number to force Excel to treat it as TEXT
+        stall.contact_number ? `\t${stall.contact_number}` : '',
         stall.monthly_rent,
         stall.payment_status
       ];

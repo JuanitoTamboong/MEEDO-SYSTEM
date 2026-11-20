@@ -92,6 +92,7 @@ export default function FinancialReports() {
       const sectionMap = new Map(sectionsData?.map(s => [s.id, s]) || []);
       const tenantMap = new Map(tenantsData?.map(t => [t.stall_id, t]) || []);
 
+      // TANGGALIN ANG DUPLICATES sa query
       const { data: paidData } = await supabase
         .from('payments')
         .select('*')
@@ -106,7 +107,10 @@ export default function FinancialReports() {
       let avgPayment = 0;
 
       if (paidData) {
-        const enriched = paidData.map(p => {
+        // Gumamit ng Set para hindi mag-doble kung may duplicate IDs
+        const uniquePayments = Array.from(new Map(paidData.map(p => [p.id, p])).values());
+
+        const enriched = uniquePayments.map(p => {
           const stall = stallMap.get(p.stall_id);
           const section = stall ? sectionMap.get(stall.section_id) : null;
           const tenantInfo = tenantMap.get(p.stall_id);
@@ -215,7 +219,9 @@ export default function FinancialReports() {
       const grouped: Record<number, { rent: number; penalty: number; total: number; count: number }> = {};
 
       if (annualRaw) {
-        annualRaw.forEach(p => {
+        const uniqueAnnual = Array.from(new Map(annualRaw.map(p => [p.month_covered + p.amount, p])).values());
+        
+        uniqueAnnual.forEach(p => {
           if (!p.month_covered) return;
           const month = new Date(p.month_covered).getMonth() + 1;
           const rent = Number(p.amount) || 0;
@@ -252,13 +258,23 @@ export default function FinancialReports() {
     }
   }
 
+  // EXCEL-FRIENDLY EXPORT FUNCTION
   const exportTable = (filename: string, data: any[], columns: string[]) => {
+    // BOM para hindi magulo ang characters sa Excel
     const csv: string[] = ['\uFEFF'];
     csv.push(columns.join(','));
 
     data.forEach(row => {
       const rowData = columns.map(col => {
         let val = row[col] !== null && row[col] !== undefined ? String(row[col]) : '';
+        
+        // Kung number, siguraduhing walang comma (Excel format)
+        if (!isNaN(Number(val)) && val.trim() !== '') {
+           // Huwag lagyan ng quotes kung simpleng number para mag-compute ang Excel
+           return val;
+        }
+
+        // Escape quotes
         return `"${val.replace(/"/g, '""')}"`;
       });
       csv.push(rowData.join(','));
@@ -278,14 +294,15 @@ export default function FinancialReports() {
 
   const handleExportMonthly = () => {
     const exportData = monthlyPayments.map(p => ({
-      Date: formatExportDate(p.payment_date),
+      Date: formatExportDate(p.payment_date), // YYYY-MM-DD format
       'Stall #': p.stall_number || '',
       Tenant: p.display_tenant_name || '',
       Section: p.section_name || '',
-      Rent: p.base_amount.toFixed(2),
-      Penalty: p.penalty > 0 ? p.penalty.toFixed(2) : '-',
-      Total: p.total_paid.toFixed(2),
-      Reference: p.receipt_number || `PAY-${p.id}`
+      Rent: Number(p.base_amount).toFixed(2),
+      Penalty: p.penalty > 0 ? Number(p.penalty).toFixed(2) : '-',
+      Total: Number(p.total_paid).toFixed(2),
+      // Lagyan ng ="..." para maging text sa Excel at hindi maging 2.98E+11
+      Reference: `="${p.receipt_number || `PAY-${p.id}`}"` 
     }));
     const cols = ['Date', 'Stall #', 'Tenant', 'Section', 'Rent', 'Penalty', 'Total', 'Reference'];
     exportTable('monthly-report', exportData, cols);
@@ -300,10 +317,10 @@ export default function FinancialReports() {
       return {
         Month: m.name,
         Payments: count,
-        Rent: (data?.rent || 0).toFixed(2),
-        Penalty: penalty > 0 ? penalty.toFixed(2) : '-',
-        Total: total.toFixed(2),
-        'Average per Payment': (count > 0 ? total / count : 0).toFixed(2)
+        Rent: Number(data?.rent || 0).toFixed(2),
+        Penalty: penalty > 0 ? Number(penalty).toFixed(2) : '-',
+        Total: Number(total).toFixed(2),
+        'Average per Payment': Number(count > 0 ? total / count : 0).toFixed(2)
       };
     });
     const cols = ['Month', 'Payments', 'Rent', 'Penalty', 'Total', 'Average per Payment'];

@@ -1,5 +1,4 @@
-
-
+/* --- Page Header --- */
 .page-header {
     display: flex;
     justify-content: space-between;
@@ -22,60 +21,6 @@
     margin-top: 4px;
 }
 
-.header-tools {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-}
-
-.input-with-icon {
-    position: relative;
-}
-
-.input-with-icon i {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #94a3b8;
-    font-size: 13px;
-}
-
-.input-with-icon input {
-    padding: 8px 12px 8px 32px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    font-size: 13px;
-    width: 260px;
-    outline: none;
-    transition: border-color 0.15s;
-}
-
-.input-with-icon input:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.btn-secondary {
-    background: white;
-    border: 1px solid #cbd5e1;
-    color: #475569;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s;
-}
-
-.btn-secondary:hover {
-    background: #f1f5f9;
-    color: #0f172a;
-}
-
 /* --- Metric Row --- */
 .metric-row {
     display: grid;
@@ -92,7 +37,7 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .metric-icon {
@@ -137,7 +82,7 @@
     border: 1px solid #e2e8f0;
     border-radius: 10px;
     padding: 24px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .config-header {
@@ -362,11 +307,11 @@
     display: flex;
     flex-direction: column;
     transition: all 0.2s ease;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .stall-item:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
     border-color: #cbd5e1;
 }
 
@@ -595,14 +540,6 @@
         flex-direction: column;
         align-items: flex-start;
         gap: 16px;
-    }
-    .header-tools {
-        width: 100%;
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .input-with-icon input {
-        width: 100%;
     }
     .enterprise-form {
         flex-direction: column;

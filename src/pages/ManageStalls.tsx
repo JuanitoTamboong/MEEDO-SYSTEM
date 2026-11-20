@@ -213,11 +213,6 @@ export default function ManageStalls() {
           <h1>Manage Stalls</h1>
           <p>Configure market sections, stalls, and base rental rates.</p>
         </div>
-        <div className="header-tools">
-          <button className="btn-secondary">
-            <i className="fa-solid fa-download"></i> Export
-          </button>
-        </div>
       </div>
 
       <div className="metric-row">
